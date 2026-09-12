@@ -381,13 +381,33 @@ function OrdersTab({ orders, onRefresh }: { orders: Order[]; onRefresh: () => Pr
 
   const filtered = filter === 'all' ? orders : orders.filter(o => o.status === filter);
 
-  const updateStatus = async (orderId: string, status: OrderStatus) => {
+const updateStatus = async (orderId: string, status: OrderStatus) => {
     const { error } = await supabase.from('orders').update({ status }).eq('id', orderId);
+    
     if (error) {
       showToast('Failed to update order status', 'error');
     } else {
       showToast(`Order marked as ${status.replace(/_/g, ' ')}`);
       await onRefresh();
+
+      // --- AUTOMATED EMAIL TRIGGER ---
+      // 1. Find the specific order to get the customer's email address
+      const targetOrder = orders.find(o => o.id === orderId);
+      
+      // 2. Format the status nicely (e.g., "out_for_delivery" -> "Out For Delivery")
+      const formattedStatus = status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+
+      // 3. Send the email
+      if (targetOrder?.customer_email) {
+        supabase.functions.invoke('send-order-email', {
+          body: {
+            type: 'STATUS_UPDATE',
+            customerEmail: targetOrder.customer_email, 
+            status: formattedStatus
+          }
+        }).catch(err => console.error("Failed to trigger email:", err));
+      }
+      // -------------------------------
     }
   };
 

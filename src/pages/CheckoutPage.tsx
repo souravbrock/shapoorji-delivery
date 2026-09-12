@@ -40,7 +40,7 @@ export default function CheckoutPage() {
     );
   }
 
-  const handlePlaceOrder = async (e: React.FormEvent) => {
+const handlePlaceOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !phone.trim() || !address.trim()) {
       showToast('Please fill in all delivery details', 'error');
@@ -57,6 +57,7 @@ export default function CheckoutPage() {
           delivery_address: address,
           customer_name: name,
           customer_phone: phone,
+          customer_email: session.user.email, // Saves email for the admin to use later
           notes: notes,
           status: 'received',
         })
@@ -76,6 +77,23 @@ export default function CheckoutPage() {
 
       const { error: itemsError } = await supabase.from('order_items').insert(orderItems);
       if (itemsError) throw itemsError;
+
+      // --- AUTOMATED EMAIL TRIGGER ---
+      supabase.functions.invoke('send-order-email', {
+        body: {
+          type: 'NEW_ORDER',
+          customerEmail: session.user.email,
+          orderDetails: {
+            items: orderItems.map(item => ({
+              name: item.product_name,
+              quantity: item.quantity,
+              price: item.price
+            })),
+            total: cartTotal
+          }
+        }
+      }).catch(err => console.error("Failed to trigger email:", err));
+      // -------------------------------
 
       await clearCart();
       setOrderPlaced(order.id);

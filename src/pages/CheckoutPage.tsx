@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+const [paymentMethod, setPaymentMethod] = useState('cod');
 import { ArrowLeft, CheckCircle, MapPin, User, Phone, MessageSquare, Loader2 } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
 import { useAuth } from '@/context/AuthContext';
@@ -205,9 +206,24 @@ const handlePlaceOrder = async (e: React.FormEvent) => {
                 <span>₹{cartTotal.toFixed(0)}</span>
               </div>
             </div>
-            <div className="mt-4 p-3 rounded-xl bg-amber-50 border border-amber-100">
-              <p className="text-xs text-amber-700 font-medium">Cash on Delivery</p>
-              <p className="text-xs text-amber-600 mt-0.5">Pay in cash when your order is delivered.</p>
+{/* Payment Method Selection */}
+            <div className="mt-6 mb-6 space-y-3">
+              <h4 className="text-sm font-semibold text-gray-900">Payment Method</h4>
+              <label className={`flex items-center gap-3 p-3 border rounded-xl cursor-pointer transition-colors ${paymentMethod === 'cod' ? 'border-primary-500 bg-primary-50' : 'border-gray-200 hover:bg-gray-50'}`}>
+                <input type="radio" name="payment" checked={paymentMethod === 'cod'} onChange={() => setPaymentMethod('cod')} className="text-primary-600 w-4 h-4 cursor-pointer" />
+                <div>
+                  <p className="text-sm font-medium text-gray-900">Pay on Delivery</p>
+                  <p className="text-xs text-gray-500 mt-0.5">Cash or UPI at your doorstep</p>
+                </div>
+              </label>
+              
+              <label className={`flex items-center gap-3 p-3 border rounded-xl cursor-pointer transition-colors ${paymentMethod === 'paytm' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:bg-gray-50'}`}>
+                <input type="radio" name="payment" checked={paymentMethod === 'paytm'} onChange={() => setPaymentMethod('paytm')} className="text-blue-600 w-4 h-4 cursor-pointer" />
+                <div>
+                  <p className="text-sm font-medium text-gray-900">Pay Online</p>
+                  <p className="text-xs text-gray-500 mt-0.5">Credit/Debit Card, Netbanking, UPI via Paytm</p>
+                </div>
+              </label>
             </div>
             <button type="submit" disabled={placing} className="btn-primary w-full mt-6 py-3">
               {placing ? (

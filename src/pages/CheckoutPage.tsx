@@ -11,7 +11,7 @@ export default function CheckoutPage() {
   const { session, profile } = useAuth();
   const { navigate } = useRouter();
   const { showToast } = useToast();
-  const [paymentMethod, setPaymentMethod] = useState('cod');
+  
   const [name, setName] = useState(profile?.full_name || '');
   const [phone, setPhone] = useState(profile?.phone || '');
   const [address, setAddress] = useState(profile?.address || '');
@@ -41,7 +41,7 @@ export default function CheckoutPage() {
     );
   }
 
-const handlePlaceOrder = async (e: React.FormEvent) => {
+  const handlePlaceOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !phone.trim() || !address.trim()) {
       showToast('Please fill in all delivery details', 'error');
@@ -58,7 +58,7 @@ const handlePlaceOrder = async (e: React.FormEvent) => {
           delivery_address: address,
           customer_name: name,
           customer_phone: phone,
-          customer_email: session.user.email, // Saves email for the admin to use later
+          customer_email: session.user.email,
           notes: notes,
           status: 'received',
         })
@@ -79,7 +79,7 @@ const handlePlaceOrder = async (e: React.FormEvent) => {
       const { error: itemsError } = await supabase.from('order_items').insert(orderItems);
       if (itemsError) throw itemsError;
 
-      // --- AUTOMATED EMAIL TRIGGER ---
+      // Automated Email Trigger
       supabase.functions.invoke('send-order-email', {
         body: {
           type: 'NEW_ORDER',
@@ -94,7 +94,6 @@ const handlePlaceOrder = async (e: React.FormEvent) => {
           }
         }
       }).catch(err => console.error("Failed to trigger email:", err));
-      // -------------------------------
 
       await clearCart();
       setOrderPlaced(order.id);
@@ -206,26 +205,13 @@ const handlePlaceOrder = async (e: React.FormEvent) => {
                 <span>₹{cartTotal.toFixed(0)}</span>
               </div>
             </div>
-{/* Payment Method Selection */}
-            <div className="mt-6 mb-6 space-y-3">
-              <h4 className="text-sm font-semibold text-gray-900">Payment Method</h4>
-              <label className={`flex items-center gap-3 p-3 border rounded-xl cursor-pointer transition-colors ${paymentMethod === 'cod' ? 'border-primary-500 bg-primary-50' : 'border-gray-200 hover:bg-gray-50'}`}>
-                <input type="radio" name="payment" checked={paymentMethod === 'cod'} onChange={() => setPaymentMethod('cod')} className="text-primary-600 w-4 h-4 cursor-pointer" />
-                <div>
-                  <p className="text-sm font-medium text-gray-900">Pay on Delivery</p>
-                  <p className="text-xs text-gray-500 mt-0.5">Cash or UPI at your doorstep</p>
-                </div>
-              </label>
-              
-              <label className={`flex items-center gap-3 p-3 border rounded-xl cursor-pointer transition-colors ${paymentMethod === 'paytm' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:bg-gray-50'}`}>
-                <input type="radio" name="payment" checked={paymentMethod === 'paytm'} onChange={() => setPaymentMethod('paytm')} className="text-blue-600 w-4 h-4 cursor-pointer" />
-                <div>
-                  <p className="text-sm font-medium text-gray-900">Pay Online</p>
-                  <p className="text-xs text-gray-500 mt-0.5">Credit/Debit Card, Netbanking, UPI via Paytm</p>
-                </div>
-              </label>
+            
+            <div className="mt-4 p-4 rounded-xl bg-amber-50 border border-amber-100">
+              <p className="text-sm text-amber-800 font-semibold mb-1">Pay on Delivery (COD/UPI)</p>
+              <p className="text-xs text-amber-700 leading-relaxed">Pay easily via Cash or any UPI app (GPay, PhonePe, Paytm) when your order arrives at your doorstep.</p>
             </div>
-            <button type="submit" disabled={placing} className="btn-primary w-full mt-6 py-3">
+
+            <button type="submit" disabled={placing} className="btn-primary w-full mt-6 py-3 shadow-md hover:shadow-lg transition-all">
               {placing ? (
                 <><Loader2 className="w-4 h-4 animate-spin" /> Placing Order...</>
               ) : 'Place Order'}

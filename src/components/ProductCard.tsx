@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Heart, ShoppingCart, Star, Plus, Minus } from 'lucide-react';
+import { Heart, ShoppingCart, Plus, Minus, Check } from 'lucide-react';
 import type { Product } from '@/lib/supabase';
 import { useCart } from '@/context/CartContext';
 import { useAuth } from '@/context/AuthContext';
@@ -7,13 +7,18 @@ import { useRouter } from '@/context/RouterContext';
 import { supabase } from '@/lib/supabase';
 
 export default function ProductCard({ product }: { product: Product }) {
-  const { addToCart } = useCart();
+  // We added 'items' here to check the global cart state
+  const { items, addToCart } = useCart();
   const { session } = useAuth();
   const { navigate } = useRouter();
   const [isFavorite, setIsFavorite] = useState(false);
   const [adding, setAdding] = useState(false);
   const [showQty, setShowQty] = useState(false);
   const [qty, setQty] = useState(1);
+
+  // Check if this specific product is already in the global cart
+  const cartItem = items?.find((item) => item.product_id === product.id);
+  const isInCart = !!cartItem;
 
   useEffect(() => {
     if (!session?.user) return;
@@ -102,7 +107,8 @@ export default function ProductCard({ product }: { product: Product }) {
             ₹{product.price.toFixed(0)}
           </span>
 
-          {!showQty ? (
+          {/* Dynamic Button Logic */}
+          {!showQty && !isInCart ? (
             <button
               onClick={() => session ? setShowQty(true) : navigate('/auth')}
               disabled={outOfStock}
@@ -110,6 +116,14 @@ export default function ProductCard({ product }: { product: Product }) {
             >
               <Plus className="w-3.5 h-3.5" />
               Add
+            </button>
+          ) : isInCart ? (
+            <button
+              onClick={() => navigate('/cart')}
+              className="bg-green-100 text-green-700 hover:bg-green-200 rounded-xl font-medium text-xs px-3 py-2 flex items-center gap-1 transition-colors"
+            >
+              <Check className="w-3.5 h-3.5" />
+              Added
             </button>
           ) : (
             <div className="flex items-center gap-1.5 animate-scale-in">
@@ -140,4 +154,3 @@ export default function ProductCard({ product }: { product: Product }) {
     </div>
   );
 }
-

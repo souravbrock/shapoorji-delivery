@@ -12,39 +12,43 @@ export default function CheckoutPage() {
   const { navigate } = useRouter();
   const { showToast } = useToast();
   
-  const [name, setName] = useState(profile?.full_name || '');
-  const [phone, setPhone] = useState(profile?.phone || '');
-  const [address, setAddress] = useState(profile?.address || '');
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [address, setAddress] = useState('');
   const [notes, setNotes] = useState('');
   const [placing, setPlacing] = useState(false);
   const [orderPlaced, setOrderPlaced] = useState<string | null>(null);
 
-// Aggressively fetch saved details directly from the database
+  // The Foolproof Auto-Fill: Fetch from the most recent order
   useEffect(() => {
-    async function loadSavedDetails() {
+    async function fetchLastUsedDetails() {
       if (!session?.user?.id) return;
-      
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('full_name, phone, address')
-        .eq('id', session.user.id)
-        .single();
-        
-      if (data) {
-        if (data.full_name) setName(data.full_name);
-        if (data.phone) setPhone(data.phone);
-        if (data.address) setAddress(data.address);
+
+      // 1. Check their most recent order (Guaranteed to work)
+      const { data: lastOrder } = await supabase
+        .from('orders')
+        .select('customer_name, customer_phone, delivery_address')
+        .eq('user_id', session.user.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (lastOrder) {
+        setName(prev => prev || lastOrder.customer_name || '');
+        setPhone(prev => prev || lastOrder.customer_phone || '');
+        setAddress(prev => prev || lastOrder.delivery_address || '');
+        return;
+      }
+
+      // 2. Fallback to profile data if it is their very first time ordering
+      if (profile) {
+        setName(prev => prev || profile.full_name || '');
+        setPhone(prev => prev || profile.phone || '');
+        setAddress(prev => prev || profile.address || '');
       }
     }
-    
-    // Also use any data already in the context profile as a fallback
-    if (profile) {
-      if (!name && profile.full_name) setName(profile.full_name);
-      if (!phone && profile.phone) setPhone(profile.phone);
-      if (!address && profile.address) setAddress(profile.address);
-    }
 
-    loadSavedDetails();
+    fetchLastUsedDetails();
   }, [session, profile]);
 
   if (!session) {
@@ -70,16 +74,7 @@ export default function CheckoutPage() {
     setPlacing(true);
 
     try {
-      // 1. SAVE PROFILE DATA: This ensures the user doesn't have to re-type it next time!
-      await supabase.from('profiles').upsert({
-        id: session.user.id,
-        full_name: name,
-        phone: phone,
-        address: address,
-        updated_at: new Date().toISOString()
-      });
-
-      // 2. Create the Order
+      // Create the Order
       const { data: order, error: orderError } = await supabase
         .from('orders')
         .insert({
@@ -97,7 +92,7 @@ export default function CheckoutPage() {
 
       if (orderError) throw orderError;
 
-      // 3. Insert Order Items
+      // Insert Order Items
       const orderItems = items.map((item) => ({
         order_id: order.id,
         product_id: item.product_id,
@@ -110,7 +105,7 @@ export default function CheckoutPage() {
       const { error: itemsError } = await supabase.from('order_items').insert(orderItems);
       if (itemsError) throw itemsError;
 
-      // 4. Trigger Email & Telegram Notification (Now includes Name, Phone, Address!)
+      // Trigger Email & Telegram Notification
       supabase.functions.invoke('send-order-email', {
         body: {
           type: 'NEW_ORDER',
@@ -128,6 +123,14 @@ export default function CheckoutPage() {
           }
         }
       }).catch(err => console.error("Failed to trigger email/telegram:", err));
+
+      // Attempt background profile update (fails silently if restricted, which is fine now)
+      supabase.from('profiles').update({
+        full_name: name,
+        phone: phone,
+        address: address,
+        updated_at: new Date().toISOString()
+      }).eq('id', session.user.id).then();
 
       await clearCart();
       setOrderPlaced(order.id);

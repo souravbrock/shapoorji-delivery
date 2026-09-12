@@ -14,10 +14,12 @@ export default function ProductCard({ product }: { product: Product }) {
   const [adding, setAdding] = useState(false);
   const [showQty, setShowQty] = useState(false);
 
-  // Check if this item is sold by weight (kg)
-  const isWeightBased = product.unit?.toLowerCase() === 'kg';
+  // UPDATED FIX: Check if "kg" or "gm" exists anywhere in the unit string
+  const normalizedUnit = product.unit?.toLowerCase() || '';
+  const isWeightBased = normalizedUnit.includes('kg') || normalizedUnit.includes('gm') || normalizedUnit.includes('g');
+  
   const step = isWeightBased ? 0.25 : 1;
-  const initialQty = isWeightBased ? 0.25 : 1; // Default to 250g if it's a kg item
+  const initialQty = isWeightBased ? 0.25 : 1;
   
   const [qty, setQty] = useState(initialQty);
 
@@ -65,7 +67,7 @@ export default function ProductCard({ product }: { product: Product }) {
 
   const outOfStock = product.stock <= 0;
 
-  // Format the visual display (e.g. show "250g" instead of "0.25", or "1.5kg")
+  // Format the visual display (shows "250g" instead of "0.25", or "1.5kg")
   const displayQty = isWeightBased 
     ? (qty < 1 ? `${qty * 1000}g` : `${qty}kg`)
     : qty;

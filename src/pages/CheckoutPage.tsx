@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-const [paymentMethod, setPaymentMethod] = useState('cod');
 import { ArrowLeft, CheckCircle, MapPin, User, Phone, MessageSquare, Loader2 } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
 import { useAuth } from '@/context/AuthContext';
@@ -12,6 +11,7 @@ export default function CheckoutPage() {
   const { session, profile } = useAuth();
   const { navigate } = useRouter();
   const { showToast } = useToast();
+  const [paymentMethod, setPaymentMethod] = useState('cod');
   const [name, setName] = useState(profile?.full_name || '');
   const [phone, setPhone] = useState(profile?.phone || '');
   const [address, setAddress] = useState(profile?.address || '');

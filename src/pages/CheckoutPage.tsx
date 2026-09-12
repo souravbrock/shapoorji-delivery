@@ -19,14 +19,33 @@ export default function CheckoutPage() {
   const [placing, setPlacing] = useState(false);
   const [orderPlaced, setOrderPlaced] = useState<string | null>(null);
 
-  // Auto-fill fields if the profile has them saved
+// Aggressively fetch saved details directly from the database
   useEffect(() => {
-    if (profile) {
-      setName(profile.full_name || '');
-      setPhone(profile.phone || '');
-      setAddress(profile.address || '');
+    async function loadSavedDetails() {
+      if (!session?.user?.id) return;
+      
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('full_name, phone, address')
+        .eq('id', session.user.id)
+        .single();
+        
+      if (data) {
+        if (data.full_name) setName(data.full_name);
+        if (data.phone) setPhone(data.phone);
+        if (data.address) setAddress(data.address);
+      }
     }
-  }, [profile]);
+    
+    // Also use any data already in the context profile as a fallback
+    if (profile) {
+      if (!name && profile.full_name) setName(profile.full_name);
+      if (!phone && profile.phone) setPhone(profile.phone);
+      if (!address && profile.address) setAddress(profile.address);
+    }
+
+    loadSavedDetails();
+  }, [session, profile]);
 
   if (!session) {
     navigate('/auth');

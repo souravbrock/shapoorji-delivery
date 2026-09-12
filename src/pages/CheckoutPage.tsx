@@ -79,11 +79,14 @@ export default function CheckoutPage() {
       const { error: itemsError } = await supabase.from('order_items').insert(orderItems);
       if (itemsError) throw itemsError;
 
-      // Automated Email Trigger
+// Automated Email & Telegram Trigger
       supabase.functions.invoke('send-order-email', {
         body: {
           type: 'NEW_ORDER',
           customerEmail: session.user.email,
+          customerName: name,           // <-- Added Name
+          customerPhone: phone,         // <-- Added Phone
+          customerAddress: address,     // <-- Added Address
           orderDetails: {
             items: orderItems.map(item => ({
               name: item.product_name,

@@ -7,16 +7,20 @@ import { useRouter } from '@/context/RouterContext';
 import { supabase } from '@/lib/supabase';
 
 export default function ProductCard({ product }: { product: Product }) {
-  // We added 'items' here to check the global cart state
   const { items, addToCart } = useCart();
   const { session } = useAuth();
   const { navigate } = useRouter();
   const [isFavorite, setIsFavorite] = useState(false);
   const [adding, setAdding] = useState(false);
   const [showQty, setShowQty] = useState(false);
-  const [qty, setQty] = useState(1);
 
-  // Check if this specific product is already in the global cart
+  // Check if this item is sold by weight (kg)
+  const isWeightBased = product.unit?.toLowerCase() === 'kg';
+  const step = isWeightBased ? 0.25 : 1;
+  const initialQty = isWeightBased ? 0.25 : 1; // Default to 250g if it's a kg item
+  
+  const [qty, setQty] = useState(initialQty);
+
   const cartItem = items?.find((item) => item.product_id === product.id);
   const isInCart = !!cartItem;
 
@@ -56,10 +60,18 @@ export default function ProductCard({ product }: { product: Product }) {
     await addToCart(product.id, qty);
     setAdding(false);
     setShowQty(false);
-    setQty(1);
+    setQty(initialQty);
   };
 
   const outOfStock = product.stock <= 0;
+
+  // Format the visual display (e.g. show "250g" instead of "0.25", or "1.5kg")
+  const displayQty = isWeightBased 
+    ? (qty < 1 ? `${qty * 1000}g` : `${qty}kg`)
+    : qty;
+
+  // Dynamically show the updated price on the card based on selected weight
+  const currentPrice = product.price * qty;
 
   return (
     <div className="card overflow-hidden group hover:shadow-md transition-all duration-300 flex flex-col">
@@ -100,14 +112,14 @@ export default function ProductCard({ product }: { product: Product }) {
         >
           {product.name}
         </button>
-        <p className="text-xs text-gray-500 mt-0.5">{product.unit}</p>
+        <p className="text-xs text-gray-500 mt-0.5">{product.unit} (₹{product.price.toFixed(0)}/unit)</p>
 
         <div className="mt-auto pt-3 flex items-center justify-between gap-2">
+          {/* Display dynamically updating price based on weight/quantity */}
           <span className="font-display font-bold text-lg text-gray-900">
-            ₹{product.price.toFixed(0)}
+            ₹{currentPrice.toFixed(0)}
           </span>
 
-          {/* Dynamic Button Logic */}
           {!showQty && !isInCart ? (
             <button
               onClick={() => session ? setShowQty(true) : navigate('/auth')}
@@ -128,14 +140,16 @@ export default function ProductCard({ product }: { product: Product }) {
           ) : (
             <div className="flex items-center gap-1.5 animate-scale-in">
               <button
-                onClick={() => setQty(Math.max(1, qty - 1))}
+                onClick={() => setQty(Math.max(step, qty - step))}
                 className="w-7 h-7 rounded-lg bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition-colors"
               >
                 <Minus className="w-3.5 h-3.5" />
               </button>
-              <span className="text-sm font-semibold w-5 text-center">{qty}</span>
+              
+              <span className="text-sm font-semibold w-10 text-center">{displayQty}</span>
+              
               <button
-                onClick={() => setQty(qty + 1)}
+                onClick={() => setQty(qty + step)}
                 className="w-7 h-7 rounded-lg bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition-colors"
               >
                 <Plus className="w-3.5 h-3.5" />

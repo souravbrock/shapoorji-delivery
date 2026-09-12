@@ -19,11 +19,12 @@ export default function CheckoutPage() {
   const [placing, setPlacing] = useState(false);
   const [orderPlaced, setOrderPlaced] = useState<string | null>(null);
 
+  // Auto-fill fields if the profile has them saved
   useEffect(() => {
     if (profile) {
-      setName(profile.full_name);
-      setPhone(profile.phone);
-      setAddress(profile.address);
+      setName(profile.full_name || '');
+      setPhone(profile.phone || '');
+      setAddress(profile.address || '');
     }
   }, [profile]);
 
@@ -50,6 +51,16 @@ export default function CheckoutPage() {
     setPlacing(true);
 
     try {
+      // 1. SAVE PROFILE DATA: This ensures the user doesn't have to re-type it next time!
+      await supabase.from('profiles').upsert({
+        id: session.user.id,
+        full_name: name,
+        phone: phone,
+        address: address,
+        updated_at: new Date().toISOString()
+      });
+
+      // 2. Create the Order
       const { data: order, error: orderError } = await supabase
         .from('orders')
         .insert({
@@ -67,6 +78,7 @@ export default function CheckoutPage() {
 
       if (orderError) throw orderError;
 
+      // 3. Insert Order Items
       const orderItems = items.map((item) => ({
         order_id: order.id,
         product_id: item.product_id,
@@ -79,14 +91,14 @@ export default function CheckoutPage() {
       const { error: itemsError } = await supabase.from('order_items').insert(orderItems);
       if (itemsError) throw itemsError;
 
-// Automated Email & Telegram Trigger
+      // 4. Trigger Email & Telegram Notification (Now includes Name, Phone, Address!)
       supabase.functions.invoke('send-order-email', {
         body: {
           type: 'NEW_ORDER',
           customerEmail: session.user.email,
-          customerName: name,           // <-- Added Name
-          customerPhone: phone,         // <-- Added Phone
-          customerAddress: address,     // <-- Added Address
+          customerName: name,           
+          customerPhone: phone,         
+          customerAddress: address,     
           orderDetails: {
             items: orderItems.map(item => ({
               name: item.product_name,
@@ -96,7 +108,7 @@ export default function CheckoutPage() {
             total: cartTotal
           }
         }
-      }).catch(err => console.error("Failed to trigger email:", err));
+      }).catch(err => console.error("Failed to trigger email/telegram:", err));
 
       await clearCart();
       setOrderPlaced(order.id);

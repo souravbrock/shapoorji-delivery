@@ -1,40 +1,44 @@
-name: Deploy Delivery App to DomainAdda
+  name: Deploy Delivery App to DomainAdda (MySQL/Prisma)
 
-on:
-  push:
-    branches:
-      - main  # Change to 'master' if your default branch is master
+  on:
+    push:
+      branches:
+        - main
 
-jobs:
-  build-and-deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
+  jobs:
+    build-and-deploy:
+      runs-on: ubuntu-latest
+      steps:
+        - name: Checkout Code
+          uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '24'
+        - name: Setup Node.js
+          uses: actions/setup-node@v4
+          with:
+            node-version: '24'
 
-      - name: Install Dependencies
-        run: npm install
+        - name: Install Dependencies
+          run: npm install
 
-      - name: Create .env file
-        run: |
-          echo "VITE_SUPABASE_URL=${{ secrets.VITE_SUPABASE_URL }}" > .env
-          echo "VITE_SUPABASE_ANON_KEY=${{ secrets.VITE_SUPABASE_ANON_KEY }}" >> .env
+        - name: Install Prisma
+          run: npx prisma generate
 
-      - name: Build Project
-        run: npm run build
+        - name: Create .env file
+          run: |
+            echo "DATABASE_URL=${{ secrets.DATABASE_URL }}" > .env
+            echo "JWT_SECRET=${{ secrets.JWT_SECRET }}" >> .env
+            echo "NODE_ENV=production" >> .env
 
-      - name: Sync Files to cPanel
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
-        with:
-          server: ${{ secrets.FTP_SERVER }}
-          username: ${{ secrets.FTP_USERNAME }}
-          password: ${{ secrets.FTP_PASSWORD }}
-          local-dir: ./dist/ 
-          server-dir: ./
-          port: 21
-          protocol: ftp
+        - name: Build Project
+          run: npm run build
+
+        - name: Sync Files to cPanel
+          uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+          with:
+            server: ${{ secrets.FTP_SERVER }}
+            username: ${{ secrets.FTP_USERNAME }}
+            password: ${{ secrets.FTP_PASSWORD }}
+            local-dir: ./dist/
+            server-dir: ./
+            port: 21
+            protocol: ftp

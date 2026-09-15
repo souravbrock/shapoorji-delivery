@@ -26,7 +26,7 @@
   ) => {
     // Check if user already exists by email
     const existingUser = await prisma.profile.findFirst({
-      where: { email }, // NOTE: You'll need to add email field to Profile model
+      where: { email },
     });
 
     if (existingUser) {
@@ -36,15 +36,12 @@
     // Hash password
     const hashedPassword = await hashPassword(password);
 
-    // Create profile (you'll need to add email and password fields to your schema)
+    // Create profile
     const user = await prisma.profile.create({
       data: {
-        // You'll need to update your Prisma schema to include:
-        // email: String @unique
-        // password: String
+        email,
+        password: hashedPassword, // Storing hashed password in profile for simplicity
         full_name: fullName,
-        // For now, storing password in profile (NOT recommended for production)
-        // Better: create separate User table for auth credentials
       },
     });
 
@@ -67,11 +64,10 @@
       throw new Error('Invalid credentials');
     }
 
-    // Verify password (you'll need to store hashed password in your schema)
-    // const isValid = await verifyPassword(password, user.password);
-    // if (!isValid) throw new Error('Invalid credentials');
+    // Verify password
+    const isValid = await verifyPassword(password, user.password);
+    if (!isValid) throw new Error('Invalid credentials');
 
-    // For now, assuming password verification works
     const token = generateToken(user.id);
     return {
       id: user.id,
@@ -80,10 +76,9 @@
     };
   };
 
-  // Sign out (mostly client-side, but could invalidate server-side tokens if needed)
+  // Sign out
   export const signOut = async () => {
     // For JWT, signout is primarily client-side (removing token)
-    // If you implement refresh tokens or token blacklisting, add server-side logic here
     return;
   };
 

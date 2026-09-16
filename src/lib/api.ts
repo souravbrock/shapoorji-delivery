@@ -34,6 +34,13 @@ async function upload<T>(path: string, formData: FormData): Promise<T> {
   return body as T;
 }
 
+// MySQL DECIMAL columns arrive as strings (e.g. "53.00"), so calling
+// .toFixed() on them crashes. Wrap every money value with num() first.
+export function num(v: unknown): number {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+}
+
 export const api = {
   get: <T>(path: string) => request<T>(path),
   post: <T>(path: string, data?: unknown) =>

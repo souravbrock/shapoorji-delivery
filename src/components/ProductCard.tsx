@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Heart, ShoppingCart, Plus, Minus, Check } from 'lucide-react';
-import { api, type Product } from '@/lib/api';
+import { api, num, type Product } from '@/lib/api';
 import { useCart } from '@/context/CartContext';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from '@/context/RouterContext';
@@ -108,7 +108,7 @@ export default function ProductCard({ product }: { product: Product }) {
         >
           {product.name}
         </button>
-        <p className="text-xs text-gray-500 mt-0.5">{product.unit} (₹{product.price.toFixed(0)}/unit)</p>
+        <p className="text-xs text-gray-500 mt-0.5">{product.unit} (₹{num(product.price).toFixed(0)}/unit)</p>
 
         <div className="mt-auto pt-3 flex items-center justify-between gap-2">
           {/* Display dynamically updating price based on weight/quantity */}

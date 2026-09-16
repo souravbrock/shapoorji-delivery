@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Package, Clock, CheckCircle, Truck, XCircle, Download, ChevronRight, ArrowLeft } from 'lucide-react';
-import { api, type Order, type OrderItem, type OrderStatus } from '@/lib/api';
+import { api, num, type Order, type OrderItem, type OrderStatus } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from '@/context/RouterContext';
 import { generateInvoiceHTML } from '@/lib/invoice';
@@ -152,7 +152,7 @@ export default function OrdersPage() {
               <div key={item.id} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
                 <div>
                   <p className="font-medium text-sm text-gray-900">{item.product_name}</p>
-                  <p className="text-xs text-gray-500">{item.quantity} × ₹{item.price.toFixed(0)} / {item.unit}</p>
+                  <p className="text-xs text-gray-500">{item.quantity} × ₹{num(item.price).toFixed(0)} / {item.unit}</p>
                 </div>
                 <span className="font-semibold text-sm">₹{(item.price * item.quantity).toFixed(0)}</span>
               </div>
@@ -160,7 +160,7 @@ export default function OrdersPage() {
           </div>
           <div className="flex justify-between items-center mt-4 pt-4 border-t border-gray-100">
             <span className="font-display font-semibold text-lg text-gray-900">Total</span>
-            <span className="font-display font-bold text-xl text-gray-900">₹{selectedOrder.total.toFixed(0)}</span>
+            <span className="font-display font-bold text-xl text-gray-900">₹{num(selectedOrder.total).toFixed(0)}</span>
           </div>
         </div>
       </div>
@@ -199,7 +199,7 @@ export default function OrdersPage() {
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-gray-900">Order #{order.id.slice(0, 8).toUpperCase()}</p>
                   <p className="text-sm text-gray-500">
-                    {new Date(order.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} · ₹{order.total.toFixed(0)}
+                    {new Date(order.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} · ₹{num(order.total).toFixed(0)}
                   </p>
                   <span className={`badge ${config.color} mt-1`}>{config.label}</span>
                 </div>

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Minus, Plus, Trash2, ShoppingBag, ArrowRight, ArrowLeft } from 'lucide-react';
+import { num } from '@/lib/api';
 import { useCart } from '@/context/CartContext';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from '@/context/RouterContext';
@@ -55,7 +56,7 @@ export default function CartPage() {
                   {item.product?.name || 'Unknown product'}
                 </button>
                 <p className="text-xs text-gray-500">{item.product?.unit}</p>
-                <p className="font-display font-bold text-gray-900 mt-1">₹{(item.product?.price ?? 0).toFixed(0)}</p>
+                <p className="font-display font-bold text-gray-900 mt-1">₹{num(item.product?.price).toFixed(0)}</p>
               </div>
               <div className="flex flex-col items-end gap-2">
                 <div className="flex items-center gap-1.5 bg-gray-50 rounded-lg p-1">

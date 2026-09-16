@@ -10,6 +10,9 @@ const pool = mysql.createPool({
   connectionLimit: 10,
   queueLimit: 0,
   dateStrings: true,
+  // Return DECIMAL(10,2) as JS numbers instead of strings,
+  // so price/total reach the frontend as numbers.
+  decimalNumbers: true,
 });
 
 module.exports = pool;

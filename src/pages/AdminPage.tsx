@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Package, LayoutDashboard, Plus, Pencil, Trash2, X, Search, Clock, CheckCircle, Truck, XCircle, TrendingUp, IndianRupee, ShoppingBag, Upload, Loader2 } from 'lucide-react';
-import { api, type Product, type Category, type Order, type OrderStatus, type OrderItem } from '@/lib/api';
+import { api, num, type Product, type Category, type Order, type OrderStatus, type OrderItem } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from '@/context/RouterContext';
 import { useToast } from '@/components/Toast';
@@ -86,7 +86,7 @@ export default function AdminPage() {
 // DASHBOARD
 // ============================================================
 function DashboardTab({ products, orders, onGoOrders }: { products: Product[]; orders: Order[]; onGoOrders: () => void }) {
-  const totalRevenue = orders.filter(o => o.status !== 'cancelled').reduce((sum, o) => sum + o.total, 0);
+  const totalRevenue = orders.filter(o => o.status !== 'cancelled').reduce((sum, o) => sum + num(o.total), 0);
   const pendingOrders = orders.filter(o => o.status !== 'delivered' && o.status !== 'cancelled').length;
   const deliveredOrders = orders.filter(o => o.status === 'delivered').length;
 
@@ -126,7 +126,7 @@ function DashboardTab({ products, orders, onGoOrders }: { products: Product[]; o
                     <td className="py-3 px-3 font-mono text-xs">#{order.id.slice(0, 8).toUpperCase()}</td>
                     <td className="py-3 px-3">{order.customer_name}</td>
                     <td className="py-3 px-3 text-gray-500">{new Date(order.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</td>
-                    <td className="py-3 px-3 text-right font-semibold">₹{order.total.toFixed(0)}</td>
+                    <td className="py-3 px-3 text-right font-semibold">₹{num(order.total).toFixed(0)}</td>
                     <td className="py-3 px-3 text-center"><StatusBadge status={order.status} /></td>
                   </tr>
                 ))}
@@ -221,7 +221,7 @@ function ProductsTab({ products, categories, onRefresh }: { products: Product[];
                     </div>
                   </td>
                   <td className="py-3 px-4 text-gray-600">{product.category?.name || '—'}</td>
-                  <td className="py-3 px-4 text-right font-semibold">₹{product.price.toFixed(0)}</td>
+                  <td className="py-3 px-4 text-right font-semibold">₹{num(product.price).toFixed(0)}</td>
                   <td className="py-3 px-4 text-center">
                     <span className={product.stock <= 0 ? 'text-red-600 font-medium' : product.stock < 10 ? 'text-amber-600 font-medium' : 'text-gray-700'}>
                       {product.stock}
@@ -464,7 +464,7 @@ const updateStatus = async (orderId: string, status: OrderStatus) => {
                   </div>
                 </button>
                 <div className="text-right shrink-0">
-                  <p className="font-display font-bold text-lg text-gray-900">₹{order.total.toFixed(0)}</p>
+                  <p className="font-display font-bold text-lg text-gray-900">₹{num(order.total).toFixed(0)}</p>
                   <StatusBadge status={order.status} />
                 </div>
               </div>

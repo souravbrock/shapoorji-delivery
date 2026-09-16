@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Heart, Star, ShoppingCart, ArrowLeft, Plus, Minus, Package } from 'lucide-react';
-import { api, type Product, type Review } from '@/lib/api';
+import { api, num, type Product, type Review } from '@/lib/api';
 import { useRouter } from '@/context/RouterContext';
 import { useAuth } from '@/context/AuthContext';
 import { useCart } from '@/context/CartContext';
@@ -151,7 +151,7 @@ export default function ProductDetailPage({ productId }: { productId: string }) 
           </div>
 
           <div className="flex items-baseline gap-2 mb-4">
-            <span className="font-display font-bold text-3xl text-gray-900">₹{product.price.toFixed(0)}</span>
+            <span className="font-display font-bold text-3xl text-gray-900">₹{num(product.price).toFixed(0)}</span>
             <span className="text-gray-500 text-sm">/ {product.unit}</span>
           </div>
 

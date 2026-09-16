@@ -4,7 +4,7 @@ import { useCart } from '@/context/CartContext';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from '@/context/RouterContext';
 import { useToast } from '@/components/Toast';
-import { api, type Order } from '@/lib/api';
+import { api, num, type Order } from '@/lib/api';
 
 export default function CheckoutPage() {
   const { items, cartTotal, clearCart } = useCart();
@@ -173,7 +173,7 @@ export default function CheckoutPage() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-sm text-gray-900 truncate">{item.product?.name}</p>
-                    <p className="text-xs text-gray-500">{item.quantity} × ₹{(item.product?.price ?? 0).toFixed(0)}</p>
+                    <p className="text-xs text-gray-500">{item.quantity} × ₹{num(item.product?.price).toFixed(0)}</p>
                   </div>
                   <span className="font-semibold text-sm">₹{((item.product?.price ?? 0) * item.quantity).toFixed(0)}</span>
                 </div>

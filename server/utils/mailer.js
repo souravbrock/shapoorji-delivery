@@ -18,12 +18,14 @@ function getTransporter() {
 
 // Fire-and-forget style — logs errors but never throws, so a broken
 // mail server never blocks checkout or admin status updates.
-async function sendOrderEmail({ to, subject, html }) {
+async function sendOrderEmail({ to, bcc, subject, html, text }) {
   try {
     await getTransporter().sendMail({
       from: process.env.SMTP_FROM,
       to,
+      ...(bcc ? { bcc } : {}),
       subject,
+      ...(text ? { text } : {}),
       html,
     });
   } catch (err) {
@@ -40,23 +42,74 @@ function escapeHtml(value) {
     .replace(/'/g, '&#39;');
 }
 
-function renderOrderPlacedEmail(order, items) {
-  const rows = items
-    .map(
-      (i) =>
-        `<tr><td>${escapeHtml(i.product_name)}</td><td>${escapeHtml(i.quantity)} ${escapeHtml(i.unit)}</td><td>₹${Number(i.price).toFixed(2)}</td></tr>`
-    )
-    .join('');
-  return `
-    <h2>Order Confirmation — #${escapeHtml(String(order.id).slice(0, 8))}</h2>
-    <p>Hi ${escapeHtml(order.customer_name)}, thanks for your order!</p>
-    <table border="1" cellpadding="6" cellspacing="0">
-      <tr><th>Item</th><th>Qty</th><th>Price</th></tr>
-      ${rows}
-    </table>
-    <p><strong>Total: ₹${Number(order.total).toFixed(2)}</strong></p>
-    <p>Delivery address: ${escapeHtml(order.delivery_address)}</p>
-  `;
+function money2(n) {
+  return `₹${(Number(n) || 0).toFixed(2)}`;
+}
+
+function moneyLine(n) {
+  const r = Math.round(Number(n) * 100) / 100;
+  return `₹${Number.isInteger(r) ? String(r) : r.toFixed(2)}`;
+}
+
+function fmtDateTime(d) {
+  try {
+    return new Date(d).toLocaleString('en-IN', {
+      day: 'numeric', month: 'short', year: 'numeric',
+      hour: 'numeric', minute: '2-digit', hour12: true,
+    });
+  } catch {
+    return String(d ?? '');
+  }
+}
+
+function orderTag(order) {
+  return order.order_number || `#${String(order.id).slice(0, 8).toUpperCase()}`;
+}
+
+// Plain-text store receipt (also used as the e-mail text body).
+function renderOrderReceiptText(order, items) {
+  const itemLines = items
+    .map((i) => `- ${i.product_name} (x${Number(i.quantity)}) : ${moneyLine(Number(i.price) * Number(i.quantity))}`)
+    .join('\n');
+  const L = [];
+  L.push('==================================================');
+  L.push('            SHAPOORJI GROCERY DELIVERY');
+  L.push('           spdelivery.reddevils.co.in');
+  L.push('==================================================');
+  L.push('Status: ORDER RECEIVED');
+  L.push(`Order Number  : ${order.order_number || '—'}`);
+  L.push(`Invoice Number: ${order.invoice_number || '—'}`);
+  L.push(`Date & Time   : ${fmtDateTime(order.created_at)}`);
+  L.push('--------------------------------------------------');
+  L.push('CUSTOMER & DELIVERY LOCATION:');
+  L.push(`Name          : ${order.customer_name || '—'}`);
+  L.push(`Email         : ${order.customer_email || '—'}`);
+  L.push(`Phone         : ${order.customer_phone || '—'}`);
+  L.push(`Tower/Building: ${order.tower || '—'}`);
+  L.push(`Flat / Unit   : ${order.flat || '—'}`);
+  L.push('Location Status: Verified Inside Shapoorji Shukhobrishti');
+  L.push(`Notes         : ${order.notes || '—'}`);
+  L.push('--------------------------------------------------');
+  L.push('ORDER ITEMS & PRICING:');
+  L.push(`Items Count   : ${items.length} items`);
+  L.push(`Subtotal      : ${money2(order.subtotal)}`);
+  L.push(`Delivery Fee  : ${money2(order.delivery_fee)} (Free inside Shapoorji)`);
+  L.push(`Grand Total   : ${money2(order.total)}`);
+  L.push(`Payment Method: ${order.payment_method || 'Pay on Delivery (Cash / UPI QR)'}`);
+  L.push('--------------------------------------------------');
+  L.push('🛍️ Items Billed:');
+  L.push(itemLines);
+  L.push('==================================================');
+  L.push('Delivered exclusively inside Shapoorji Shukhobrishti, Action Area III, Kolkata.');
+  L.push('Store Contact: order@spdelivery.reddevils.co.in | +91-8442980101');
+  return L.join('\n');
+}
+
+// HTML twin of the receipt (same content, monospace block).
+function renderOrderReceiptHtml(order, items) {
+  return `<pre style="font-family:monospace,monospace;font-size:13px;line-height:1.5;">${escapeHtml(
+    renderOrderReceiptText(order, items)
+  )}</pre>`;
 }
 
 function renderOrderStatusEmail(order) {
@@ -67,10 +120,37 @@ function renderOrderStatusEmail(order) {
     delivered: 'Delivered',
     cancelled: 'Cancelled',
   };
+  const label = statusLabels[order.status] || order.status;
+  const tag = escapeHtml(orderTag(order));
   return `
-    <h2>Order #${order.id.slice(0, 8)} update</h2>
-    <p>Your order status is now: <strong>${statusLabels[order.status] || order.status}</strong></p>
+    <h2>Order ${tag} update</h2>
+    <p>Hi ${escapeHtml(order.customer_name || 'there')}, your order status is now: <strong>${escapeHtml(label)}</strong></p>
+    ${order.invoice_number ? `<p>Invoice: ${escapeHtml(order.invoice_number)}</p>` : ''}
   `;
 }
 
-module.exports = { sendOrderEmail, renderOrderPlacedEmail, renderOrderStatusEmail };
+function renderOrderStatusText(order) {
+  const statusLabels = {
+    received: 'Received',
+    packed: 'Packed',
+    out_for_delivery: 'Out for Delivery',
+    delivered: 'Delivered',
+    cancelled: 'Cancelled',
+  };
+  return [
+    'SHAPOORJI GROCERY DELIVERY',
+    `Order ${orderTag(order)} update`,
+    `Status: ${(statusLabels[order.status] || order.status).toUpperCase()}`,
+    order.invoice_number ? `Invoice: ${order.invoice_number}` : null,
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
+module.exports = {
+  sendOrderEmail,
+  renderOrderReceiptText,
+  renderOrderReceiptHtml,
+  renderOrderStatusEmail,
+  renderOrderStatusText,
+};

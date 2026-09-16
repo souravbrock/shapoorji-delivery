@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Package, LayoutDashboard, Plus, Pencil, Trash2, X, Search, Clock, CheckCircle, Truck, XCircle, TrendingUp, IndianRupee, ShoppingBag, Upload, Loader2 } from 'lucide-react';
+import { Package, LayoutDashboard, Plus, Pencil, Trash2, X, Search, Clock, CheckCircle, Truck, XCircle, TrendingUp, IndianRupee, ShoppingBag, Upload, Loader2, Bell, Send } from 'lucide-react';
 import { api, num, type Product, type Category, type Order, type OrderStatus, type OrderItem } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from '@/context/RouterContext';
 import { useToast } from '@/components/Toast';
 import Modal from '@/components/Modal';
 
-type Tab = 'dashboard' | 'products' | 'orders';
+type Tab = 'dashboard' | 'products' | 'orders' | 'alerts';
 
 export default function AdminPage() {
   const { profile, session } = useAuth();
@@ -67,6 +67,7 @@ export default function AdminPage() {
         <TabButton active={tab === 'dashboard'} onClick={() => setTab('dashboard')} icon={LayoutDashboard} label="Dashboard" />
         <TabButton active={tab === 'products'} onClick={() => setTab('products')} icon={Package} label="Products" />
         <TabButton active={tab === 'orders'} onClick={() => setTab('orders')} icon={ShoppingBag} label="Orders" />
+        <TabButton active={tab === 'alerts'} onClick={() => setTab('alerts')} icon={Bell} label="Alerts" />
       </div>
 
       {loading ? (
@@ -76,6 +77,7 @@ export default function AdminPage() {
           {tab === 'dashboard' && <DashboardTab products={products} orders={orders} onGoOrders={() => setTab('orders')} />}
           {tab === 'products' && <ProductsTab products={products} categories={categories} onRefresh={fetchProducts} />}
           {tab === 'orders' && <OrdersTab orders={orders} onRefresh={fetchOrders} />}
+          {tab === 'alerts' && <AlertsTab />}
         </>
       )}
     </div>
@@ -561,6 +563,76 @@ function StatusBadge({ status }: { status: OrderStatus }) {
   };
   const c = config[status];
   return <span className={`badge ${c.className}`}>{c.label}</span>;
+}
+
+type TelegramStatus = { configured: boolean; admin: number; manager: number; staff: number };
+
+function AlertsTab() {
+  const { showToast } = useToast();
+  const [status, setStatus] = useState<TelegramStatus | null>(null);
+  const [testing, setTesting] = useState(false);
+
+  useEffect(() => {
+    api.get<TelegramStatus>('/api/admin/telegram-status').then(setStatus).catch(() => setStatus(null));
+  }, []);
+
+  const runTest = async () => {
+    setTesting(true);
+    try {
+      const res = await api.post<{ sent: number; total: number }>('/api/admin/telegram-test');
+      showToast(`Test dispatch: ${res.sent}/${res.total} delivered`);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Test dispatch failed', 'error');
+    }
+    setTesting(false);
+  };
+
+  const tiers = [
+    { name: 'Store Admin', count: status?.admin ?? 0, detail: 'Full order detail incl. phone + email' },
+    { name: 'Store Managers', count: status?.manager ?? 0, detail: 'Address + items, no phone/email' },
+    { name: 'Store Staff', count: status?.staff ?? 0, detail: 'Customer name + amount only' },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className="card p-6">
+        <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
+          <div>
+            <h3 className="font-display font-semibold text-lg text-gray-900">Telegram Bot Channel</h3>
+            <p className="text-sm text-gray-500">
+              {status === null
+                ? 'Could not load bot status.'
+                : status.configured
+                  ? 'Bot connected. New orders alert all tiers instantly.'
+                  : 'Bot token not set on the server — alerts are paused.'}
+            </p>
+          </div>
+          <button onClick={runTest} disabled={testing || !status?.configured} className="btn-primary gap-2 disabled:opacity-50">
+            {testing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+            {testing ? 'Dispatching…' : 'Test Telegram Dispatch (Broadcast to All IDs)'}
+          </button>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {tiers.map((t) => (
+            <div key={t.name} className="rounded-xl border border-gray-100 p-4">
+              <p className="font-semibold text-gray-900">{t.name}</p>
+              <p className="text-2xl font-display font-bold text-primary-700 mt-1">{t.count} <span className="text-sm font-normal text-gray-500">chat IDs</span></p>
+              <p className="text-xs text-gray-500 mt-1">{t.detail}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="card p-6">
+        <h3 className="font-display font-semibold text-lg text-gray-900 mb-2">Setup</h3>
+        <ol className="text-sm text-gray-600 space-y-1.5 list-decimal list-inside">
+          <li>Create a bot with @BotFather and keep the token secret.</li>
+          <li>Each staff member presses Start on the bot, then you read their chat ID via @userinfobot.</li>
+          <li>cPanel → Setup Node.js App → Environment Variables, set TELEGRAM_BOT_TOKEN plus TELEGRAM_ADMIN_CHAT_IDS / TELEGRAM_MANAGER_CHAT_IDS / TELEGRAM_STAFF_CHAT_IDS (comma separated), then Restart.</li>
+          <li>Mail receipts go to the customer with the admin BCC'd automatically.</li>
+        </ol>
+      </div>
+    </div>
+  );
 }
 
 function ShieldIcon() {

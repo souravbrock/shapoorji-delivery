@@ -110,7 +110,14 @@ export type Order = {
   id: string;
   user_id: string;
   status: OrderStatus;
+  order_number: string | null;
+  invoice_number: string | null;
+  subtotal: number;
+  delivery_fee: number;
   total: number;
+  payment_method: string;
+  tower: string;
+  flat: string;
   delivery_address: string;
   customer_name: string;
   customer_phone: string;

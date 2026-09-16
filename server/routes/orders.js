@@ -2,7 +2,26 @@ const express = require('express');
 const crypto = require('crypto');
 const pool = require('../db');
 const { requireAuth, requireAdmin } = require('../middleware/auth');
-const { sendOrderEmail, renderOrderPlacedEmail, renderOrderStatusEmail } = require('../utils/mailer');
+const { sendOrderEmail, renderOrderReceiptText, renderOrderReceiptHtml, renderOrderStatusEmail, renderOrderStatusText } = require('../utils/mailer');
+const { notifyNewOrderTelegram } = require('../utils/telegram');
+
+const PAYMENT_METHOD = 'Pay on Delivery (Cash / UPI QR)';
+
+// Atomic yearly sequence -> SPD-YYYY-NNNN (starts at 1027). Must run
+// on the transaction connection so concurrent checkouts can't collide.
+async function nextOrderNumber(conn) {
+  const yr = new Date().getFullYear();
+  await conn.query(
+    'INSERT INTO order_counters (year, next_seq) VALUES (?, 1027) ON DUPLICATE KEY UPDATE next_seq = LAST_INSERT_ID(next_seq + 1)',
+    [yr]
+  );
+  const [[row]] = await conn.query('SELECT LAST_INSERT_ID() AS seq');
+  return `SPD-${yr}-${row.seq}`;
+}
+
+function nextInvoiceNumber() {
+  return `INV-SPD-${Math.floor(10000 + Math.random() * 89999)}`;
+}
 
 const router = express.Router();
 router.use(requireAuth);
@@ -53,7 +72,7 @@ router.get('/:id/items', async (req, res, next) => {
 // POST /api/orders — create order + items in one transaction (checkout)
 // IMPORTANT: price/name/unit always come from the DB, never from the client.
 router.post('/', async (req, res, next) => {
-  const { delivery_address, customer_name, customer_phone, notes, items } = req.body;
+  const { delivery_address, customer_name, customer_phone, notes, items, tower, flat } = req.body;
   if (!Array.isArray(items) || items.length === 0) {
     return res.status(400).json({ error: 'Order must include at least one item' });
   }
@@ -105,13 +124,18 @@ router.post('/', async (req, res, next) => {
         unit: p.unit || 'each',
       });
     }
-    total = Math.round(total * 100) / 100; // avoid float dust
+    const subtotal = Math.round(total * 100) / 100; // avoid float dust
+    const deliveryFee = Math.round(Number(process.env.DELIVERY_FEE || 20) * 100) / 100;
+    total = Math.round((subtotal + deliveryFee) * 100) / 100;
+
+    const orderNumber = await nextOrderNumber(conn);
+    const invoiceNumber = nextInvoiceNumber();
 
     const orderId = crypto.randomUUID();
     await conn.query(
-      `INSERT INTO orders (id, user_id, status, total, delivery_address, customer_name, customer_phone, customer_email, notes)
-       VALUES (?, ?, 'received', ?, ?, ?, ?, ?, ?)`,
-      [orderId, req.user.id, total, delivery_address || '', customer_name || '', customer_phone || '', req.user.email || '', notes || '']
+      `INSERT INTO orders (id, user_id, status, order_number, invoice_number, subtotal, delivery_fee, total, payment_method, tower, flat, delivery_address, customer_name, customer_phone, customer_email, notes)
+       VALUES (?, ?, 'received', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [orderId, req.user.id, orderNumber, invoiceNumber, subtotal, deliveryFee, total, PAYMENT_METHOD, (tower || '').slice(0, 100), (flat || '').slice(0, 100), delivery_address || '', customer_name || '', customer_phone || '', req.user.email || '', notes || '']
     );
 
     for (const item of serverItems) {
@@ -127,20 +151,29 @@ router.post('/', async (req, res, next) => {
     const [orderRows] = await pool.query('SELECT * FROM orders WHERE id = ?', [orderId]);
     const order = orderRows[0];
 
+    const adminEmail = process.env.ADMIN_NOTIFY_EMAIL;
+    const receiptText = renderOrderReceiptText(order, serverItems);
+    const receiptHtml = renderOrderReceiptHtml(order, serverItems);
     if (req.user.email) {
+      // Customer gets the receipt; admin is BCC'd on the same mail.
       sendOrderEmail({
         to: req.user.email,
-        subject: `Order Confirmation #${orderId.slice(0, 8).toUpperCase()}`,
-        html: renderOrderPlacedEmail(order, serverItems),
+        bcc: adminEmail || undefined,
+        subject: `Order ${orderNumber} confirmed — Shapoorji Delivery`,
+        text: receiptText,
+        html: receiptHtml,
       });
-    }
-    if (process.env.ADMIN_NOTIFY_EMAIL) {
+    } else if (adminEmail) {
       sendOrderEmail({
-        to: process.env.ADMIN_NOTIFY_EMAIL,
-        subject: `New order #${orderId.slice(0, 8).toUpperCase()}`,
-        html: renderOrderPlacedEmail(order, serverItems),
+        to: adminEmail,
+        subject: `New order ${orderNumber} (no customer email)`,
+        text: receiptText,
+        html: receiptHtml,
       });
     }
+
+    // Staff Telegram alerts — fire-and-forget, never blocks the response.
+    notifyNewOrderTelegram(order, serverItems);
 
     res.status(201).json(order);
   } catch (err) {
@@ -162,10 +195,22 @@ router.patch('/:id/status', requireAdmin, async (req, res, next) => {
     await pool.query('UPDATE orders SET status = ? WHERE id = ?', [status, req.params.id]);
     const [rows] = await pool.query('SELECT * FROM orders WHERE id = ?', [req.params.id]);
     const order = rows[0];
+    const adminEmail = process.env.ADMIN_NOTIFY_EMAIL;
+    const tag = order ? order.order_number || `#${order.id.slice(0, 8).toUpperCase()}` : '';
     if (order && order.customer_email) {
+      // Customer gets the update; admin is BCC'd on the same mail.
       sendOrderEmail({
         to: order.customer_email,
-        subject: `Order #${order.id.slice(0, 8).toUpperCase()} — status update`,
+        bcc: adminEmail || undefined,
+        subject: `Order ${tag} — status update`,
+        text: renderOrderStatusText(order),
+        html: renderOrderStatusEmail(order),
+      });
+    } else if (order && adminEmail) {
+      sendOrderEmail({
+        to: adminEmail,
+        subject: `Order ${tag} — status update (no customer email)`,
+        text: renderOrderStatusText(order),
         html: renderOrderStatusEmail(order),
       });
     }

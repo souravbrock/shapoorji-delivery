@@ -12,6 +12,7 @@ const cartRoutes = require('./routes/cart');
 const orderRoutes = require('./routes/orders');
 const reviewRoutes = require('./routes/reviews');
 const uploadRoutes = require('./routes/uploads');
+const adminRoutes = require('./routes/notifications');
 
 const app = express();
 
@@ -51,6 +52,7 @@ app.use('/api/cart', cartRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/uploads', uploadRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Central error handler — log full error internally, send generic message in production
 app.use((err, req, res, next) => {

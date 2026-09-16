@@ -14,10 +14,15 @@ export default function CheckoutPage() {
   
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
+  const [tower, setTower] = useState('');
+  const [flat, setFlat] = useState('');
   const [address, setAddress] = useState('');
   const [notes, setNotes] = useState('');
   const [placing, setPlacing] = useState(false);
-  const [orderPlaced, setOrderPlaced] = useState<string | null>(null);
+  const [orderPlaced, setOrderPlaced] = useState<Order | null>(null);
+
+  const DELIVERY_FEE = 20;
+  const grandTotal = cartTotal + DELIVERY_FEE;
 
   // The Foolproof Auto-Fill: Fetch from the most recent order
   useEffect(() => {
@@ -31,6 +36,8 @@ export default function CheckoutPage() {
       if (lastOrder) {
         setName(prev => prev || lastOrder.customer_name || '');
         setPhone(prev => prev || lastOrder.customer_phone || '');
+        setTower(prev => prev || lastOrder.tower || '');
+        setFlat(prev => prev || lastOrder.flat || '');
         setAddress(prev => prev || lastOrder.delivery_address || '');
         return;
       }
@@ -83,6 +90,8 @@ export default function CheckoutPage() {
         delivery_address: address,
         customer_name: name,
         customer_phone: phone,
+        tower,
+        flat,
         notes,
         items: orderItems,
       });
@@ -91,7 +100,7 @@ export default function CheckoutPage() {
       api.patch('/api/auth/profile', { full_name: name, phone, address }).catch(() => {});
 
       await clearCart();
-      setOrderPlaced(order.id);
+      setOrderPlaced(order);
       showToast('Order placed successfully!');
     } catch (err) {
       showToast('Failed to place order. Please try again.', 'error');
@@ -108,7 +117,8 @@ export default function CheckoutPage() {
         </div>
         <h1 className="font-display font-bold text-3xl text-gray-900 mb-3">Order Confirmed!</h1>
         <p className="text-gray-600 mb-2">Your order has been received and is being processed.</p>
-        <p className="text-sm text-gray-400 mb-8">Order ID: {orderPlaced.slice(0, 8).toUpperCase()}</p>
+        <p className="text-sm text-gray-400 mb-1">Order: {orderPlaced.order_number || orderPlaced.id.slice(0, 8).toUpperCase()}</p>
+        <p className="text-sm text-gray-400 mb-8">Pay {num(orderPlaced.total).toFixed(2)} on delivery (Cash / UPI)</p>
         <div className="flex flex-wrap gap-3 justify-center">
           <button onClick={() => navigate(`/orders`)} className="btn-primary">Track My Order</button>
           <button onClick={() => navigate('/shop')} className="btn-secondary">Continue Shopping</button>
@@ -143,6 +153,16 @@ export default function CheckoutPage() {
                 <div className="relative">
                   <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                   <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+91 84429 80101" className="input pl-10" required />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Tower / Building</label>
+                  <input type="text" value={tower} onChange={(e) => setTower(e.target.value)} placeholder="L51" className="input" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Flat / Unit</label>
+                  <input type="text" value={flat} onChange={(e) => setFlat(e.target.value)} placeholder="904" className="input" />
                 </div>
               </div>
               <div>
@@ -193,11 +213,11 @@ export default function CheckoutPage() {
               </div>
               <div className="flex justify-between text-gray-600">
                 <span>Delivery</span>
-                <span className="text-green-600 font-medium">FREE</span>
+                <span>₹{DELIVERY_FEE.toFixed(0)}</span>
               </div>
               <div className="border-t border-gray-100 pt-3 mt-3 flex justify-between font-semibold text-gray-900 text-base">
                 <span>Total</span>
-                <span>₹{cartTotal.toFixed(0)}</span>
+                <span>₹{grandTotal.toFixed(0)}</span>
               </div>
             </div>
             

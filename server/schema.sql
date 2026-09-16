@@ -98,7 +98,14 @@ CREATE TABLE IF NOT EXISTS orders (
   id CHAR(36) PRIMARY KEY,
   user_id CHAR(36) NOT NULL,
   status ENUM('received','packed','out_for_delivery','delivered','cancelled') NOT NULL DEFAULT 'received',
+  order_number VARCHAR(32) NULL,
+  invoice_number VARCHAR(32) NULL,
+  subtotal DECIMAL(10,2) NOT NULL DEFAULT 0,
+  delivery_fee DECIMAL(10,2) NOT NULL DEFAULT 0,
   total DECIMAL(10,2) NOT NULL DEFAULT 0,
+  payment_method VARCHAR(100) NOT NULL DEFAULT 'Pay on Delivery (Cash / UPI QR)',
+  tower VARCHAR(100) NOT NULL DEFAULT '',
+  flat VARCHAR(100) NOT NULL DEFAULT '',
   delivery_address TEXT NOT NULL,
   customer_name VARCHAR(255) NOT NULL DEFAULT '',
   customer_phone VARCHAR(50) NOT NULL DEFAULT '',
@@ -108,6 +115,7 @@ CREATE TABLE IF NOT EXISTS orders (
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX idx_orders_user (user_id),
   INDEX idx_orders_status (status),
+  UNIQUE KEY uniq_order_number (order_number),
   CONSTRAINT fk_orders_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -141,6 +149,14 @@ CREATE TABLE IF NOT EXISTS reviews (
   INDEX idx_reviews_product (product_id),
   CONSTRAINT fk_reviews_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
   CONSTRAINT fk_reviews_product FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ============================================================
+-- ORDER COUNTERS (human-readable order numbers SPD-YYYY-NNNN)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS order_counters (
+  year INT PRIMARY KEY,
+  next_seq INT NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 SET FOREIGN_KEY_CHECKS = 1;

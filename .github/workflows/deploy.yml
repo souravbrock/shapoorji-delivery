@@ -55,8 +55,6 @@ jobs:
 
   deploy-frontend:
     needs: build
-    # Only run when SSH secrets are configured
-    if: ${{ secrets.CPANEL_HOST != '' && secrets.CPANEL_SSH_KEY != '' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -64,7 +62,22 @@ jobs:
           name: dist
           path: dist/
 
+      # NOTE: secrets cannot be used in jobs.<id>.if, so we gate on a step instead.
+      - name: Check SSH secrets configured
+        id: gate
+        run: |
+          if [ -z "$CPANEL_HOST" ] || [ -z "$CPANEL_SSH_KEY" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "SSH secrets not configured, skipping frontend deploy."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          CPANEL_HOST: ${{ secrets.CPANEL_HOST }}
+          CPANEL_SSH_KEY: ${{ secrets.CPANEL_SSH_KEY }}
+
       - name: Copy dist/ to cPanel via SCP
+        if: steps.gate.outputs.skip != 'true'
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.CPANEL_HOST }}
@@ -76,11 +89,23 @@ jobs:
           target: ${{ secrets.FRONTEND_PATH }}
 
   deploy-backend:
-    # Only run when SSH secrets are configured
-    if: ${{ secrets.CPANEL_HOST != '' && secrets.CPANEL_SSH_KEY != '' }}
     runs-on: ubuntu-latest
     steps:
+      - name: Check SSH secrets configured
+        id: gate
+        run: |
+          if [ -z "$CPANEL_HOST" ] || [ -z "$CPANEL_SSH_KEY" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "SSH secrets not configured, skipping backend deploy."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          CPANEL_HOST: ${{ secrets.CPANEL_HOST }}
+          CPANEL_SSH_KEY: ${{ secrets.CPANEL_SSH_KEY }}
+
       - name: Pull + install + restart Node app on cPanel
+        if: steps.gate.outputs.skip != 'true'
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.CPANEL_HOST }}

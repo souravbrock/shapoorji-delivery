@@ -83,6 +83,7 @@ jobs:
           host: ${{ secrets.CPANEL_HOST }}
           username: ${{ secrets.CPANEL_USER }}
           key: ${{ secrets.CPANEL_SSH_KEY }}
+          port: ${{ secrets.CPANEL_PORT || 22 }}
           source: dist/*
           # Strip the leading dist/ so index.html lands at the docroot, not FRONTEND_PATH/dist/
           strip_components: 1
@@ -111,6 +112,7 @@ jobs:
           host: ${{ secrets.CPANEL_HOST }}
           username: ${{ secrets.CPANEL_USER }}
           key: ${{ secrets.CPANEL_SSH_KEY }}
+          port: ${{ secrets.CPANEL_PORT || 22 }}
           script: |
             set -e
             echo "=== backend deploy ==="

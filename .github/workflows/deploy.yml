@@ -1,28 +1,19 @@
-# Build frontend on every push to main, and optionally deploy to cPanel via SSH.
+# Build frontend on every push to main, deploy to cPanel via FTP (no SSH needed).
+# SSH deploy is kept as fallback once DomainAdda enables shell access.
 #
-# REQUIRED GitHub Secrets (repo Settings -> Secrets and variables -> Actions):
-#   VITE_API_URL     e.g. https://api.reddevils.co.in  (bare origin, no /api suffix, no trailing /)
+# REQUIRED GitHub Secrets:
+#   VITE_API_URL  e.g. https://reddevils.co.in (bare origin, no /api suffix, no trailing /)
+#   FTP_SERVER    e.g. kaveri.domainadda.com (from cPanel FTP Accounts -> Configure)
+#   FTP_USERNAME  e.g. github@reddevils.co.in (must point to /public_html/spdelivery)
+#   FTP_PASSWORD  password for that FTP account
 #
-# OPTIONAL - only needed for auto-deploy (leave unset to just build + verify):
-#   CPANEL_HOST      e.g. server.domainadda.com  (or your cPanel server IP)
-#   CPANEL_USER      e.g. reddevil  (your cPanel username)
-#   CPANEL_SSH_KEY   private SSH key (see steps below)
-#   FRONTEND_PATH    e.g. ~/spdelivery.reddevils.co.in  (or ~/public_html)
-#   BACKEND_PATH     e.g. ~/shapoorji-api  (your Node app Application root)
+# OPTIONAL (SSH, only works after DomainAdda enables jailed shell):
+#   CPANEL_HOST, CPANEL_USER, CPANEL_SSH_KEY, CPANEL_PORT, FRONTEND_PATH, BACKEND_PATH
 #
-# SSH KEY SETUP (one time, ~3 min):
-#   1. On your PC: ssh-keygen -t ed25519 -f ~/.ssh/cpanel-deploy -N "" -C "github-deploy"
-#   2. cPanel -> SSH Access -> Manage SSH Keys -> Import Key (paste .pub), then Authorize it.
-#      (If no Import UI: ssh into cPanel and append the .pub to ~/.ssh/authorized_keys)
-#   3. GitHub repo -> Settings -> Secrets -> Actions -> New secret CPANEL_SSH_KEY,
-#      paste the PRIVATE key content (the file without .pub).
-#   4. Add CPANEL_HOST, CPANEL_USER, FRONTEND_PATH, BACKEND_PATH secrets the same way.
-#
-# CPANEL GIT VERSION CONTROL (alternative / fallback, no secrets needed):
-#   cPanel -> Git Version Control -> Create -> Clone URL = your GitHub repo URL,
-#   Repository Path = e.g. ~/shapoorji-delivery
-#   Then on each deploy: click Pull, then copy server/ -> BACKEND_PATH and
-#   run NPM Install + Restart in Setup Node.js App.
+# BACKEND (no SSH? use this, no secrets needed):
+#   cPanel -> Git Version Control -> Clone https://github.com/souravbrock/shapoorji-delivery
+#   to ~/shapoorji-delivery -> on each deploy click Pull, copy server/* to
+#   /home/reddevil/shapoorji-api -> Setup Node.js App -> Run NPM Install -> Restart.
 
 name: Build and Deploy to cPanel
 
@@ -53,7 +44,49 @@ jobs:
           path: dist/
           if-no-files-found: error
 
-  deploy-frontend:
+  deploy-frontend-ftp:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Check FTP secrets configured
+        id: gate
+        run: |
+          if [ -z "$FTP_SERVER" ] || [ -z "$FTP_USERNAME" ] || [ -z "$FTP_PASSWORD" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "FTP secrets not configured, skipping frontend FTP deploy."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+
+      - name: Deploy dist/ to cPanel via FTP
+        if: steps.gate.outputs.skip != 'true'
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ftp
+          port: 21
+          local-dir: ./dist/
+          # IMPORTANT: this FTP account's home directory must BE
+          # /home/reddevil/public_html/spdelivery (set in cPanel -> FTP Accounts).
+          # Then server-dir stays ./ . Do NOT set it to the full filesystem path.
+          server-dir: ./
+          dangerous-clean-slate: false
+          exclude: |
+            **/.git*
+            **/.DS_Store
+
+  deploy-frontend-ssh:
     needs: build
     runs-on: ubuntu-latest
     steps:
@@ -68,7 +101,7 @@ jobs:
         run: |
           if [ -z "$CPANEL_HOST" ] || [ -z "$CPANEL_SSH_KEY" ]; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
-            echo "SSH secrets not configured, skipping frontend deploy."
+            echo "SSH secrets not configured, skipping frontend SSH deploy."
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi

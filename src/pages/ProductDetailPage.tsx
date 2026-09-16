@@ -59,9 +59,13 @@ export default function ProductDetailPage({ productId }: { productId: string }) 
   const handleAddToCart = async () => {
     if (!session) { navigate('/auth'); return; }
     setAdding(true);
-    await addToCart(product!.id, qty);
+    try {
+      await addToCart(product!.id, qty);
+      showToast(`${qty} × ${product!.name} added to cart`);
+    } catch {
+      showToast('Could not add to cart. Please try again.', 'error');
+    }
     setAdding(false);
-    showToast(`${qty} × ${product!.name} added to cart`);
   };
 
   const submitReview = async (e: React.FormEvent) => {

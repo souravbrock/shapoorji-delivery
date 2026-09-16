@@ -65,9 +65,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [loadSession]);
 
   const signOut = useCallback(async () => {
-    await api.post('/api/auth/logout');
-    setSession(null);
-    setProfile(null);
+    try {
+      await api.post('/api/auth/logout');
+    } catch (err) {
+      console.error('Error signing out:', err);
+    } finally {
+      // Always clear local state, even if the server call fails, so the
+      // UI can never show a stale logged-in account after Sign Out.
+      setSession(null);
+      setProfile(null);
+    }
   }, []);
 
   const refreshProfile = useCallback(async () => {

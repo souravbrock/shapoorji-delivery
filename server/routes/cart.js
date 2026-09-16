@@ -40,16 +40,31 @@ router.get('/', async (req, res, next) => {
   }
 });
 
-// POST /api/cart { product_id, quantity } — upsert (add or bump quantity)
+// POST /api/cart { product_id, quantity } — upsert (add or set quantity)
+// Quantity may be fractional (weight items sell in 0.25 kg steps).
 router.post('/', async (req, res, next) => {
   const { product_id, quantity = 1 } = req.body;
+  const qty = Number(quantity);
+  if (!product_id) {
+    return res.status(400).json({ error: 'product_id is required' });
+  }
+  if (!Number.isFinite(qty) || qty <= 0 || qty > 1000) {
+    return res.status(400).json({ error: 'Invalid quantity' });
+  }
   try {
+    const [products] = await pool.query('SELECT id, is_active FROM products WHERE id = ?', [product_id]);
+    if (!products.length) {
+      return res.status(404).json({ error: 'Product not found' });
+    }
+    if (products[0].is_active === 0 || products[0].is_active === false) {
+      return res.status(400).json({ error: 'Product is not available' });
+    }
     const id = crypto.randomUUID();
     await pool.query(
       `INSERT INTO cart_items (id, user_id, product_id, quantity)
        VALUES (?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE quantity = VALUES(quantity)`,
-      [id, req.user.id, product_id, quantity]
+      [id, req.user.id, product_id, qty]
     );
     res.status(201).json({ ok: true });
   } catch (err) {
@@ -59,10 +74,13 @@ router.post('/', async (req, res, next) => {
 
 // PUT /api/cart/:product_id { quantity }
 router.put('/:product_id', async (req, res, next) => {
-  const { quantity } = req.body;
+  const qty = Number(req.body.quantity);
+  if (!Number.isFinite(qty) || qty <= 0 || qty > 1000) {
+    return res.status(400).json({ error: 'Invalid quantity' });
+  }
   try {
     await pool.query('UPDATE cart_items SET quantity = ? WHERE user_id = ? AND product_id = ?', [
-      quantity,
+      qty,
       req.user.id,
       req.params.product_id,
     ]);

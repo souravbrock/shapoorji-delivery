@@ -4,11 +4,29 @@ import { num } from '@/lib/api';
 import { useCart } from '@/context/CartContext';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from '@/context/RouterContext';
+import { useToast } from '@/components/Toast';
 
 export default function CartPage() {
   const { items, loading, updateQuantity, removeFromCart, cartTotal } = useCart();
   const { session } = useAuth();
   const { navigate } = useRouter();
+  const { showToast } = useToast();
+
+  const handleUpdate = async (productId: string, quantity: number) => {
+    try {
+      await updateQuantity(productId, quantity);
+    } catch {
+      showToast('Could not update cart. Please try again.', 'error');
+    }
+  };
+
+  const handleRemove = async (productId: string) => {
+    try {
+      await removeFromCart(productId);
+    } catch {
+      showToast('Could not remove item. Please try again.', 'error');
+    }
+  };
 
   if (!session) {
     return (
@@ -61,14 +79,14 @@ export default function CartPage() {
               <div className="flex flex-col items-end gap-2">
                 <div className="flex items-center gap-1.5 bg-gray-50 rounded-lg p-1">
                   <button
-                    onClick={() => updateQuantity(item.product_id, item.quantity - 1)}
+                    onClick={() => handleUpdate(item.product_id, item.quantity - 1)}
                     className="w-7 h-7 rounded-md bg-white flex items-center justify-center hover:bg-gray-100 transition-colors shadow-sm"
                   >
                     <Minus className="w-3.5 h-3.5" />
                   </button>
                   <span className="font-semibold text-sm w-6 text-center">{item.quantity}</span>
                   <button
-                    onClick={() => updateQuantity(item.product_id, item.quantity + 1)}
+                    onClick={() => handleUpdate(item.product_id, item.quantity + 1)}
                     className="w-7 h-7 rounded-md bg-white flex items-center justify-center hover:bg-gray-100 transition-colors shadow-sm"
                   >
                     <Plus className="w-3.5 h-3.5" />
@@ -77,7 +95,7 @@ export default function CartPage() {
                 <div className="flex items-center gap-2">
                   <span className="font-semibold text-sm text-gray-700">₹{((item.product?.price ?? 0) * item.quantity).toFixed(0)}</span>
                   <button
-                    onClick={() => removeFromCart(item.product_id)}
+                    onClick={() => handleRemove(item.product_id)}
                     className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
                     aria-label="Remove item"
                   >

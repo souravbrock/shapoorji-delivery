@@ -99,7 +99,12 @@ export default function CheckoutPage() {
       // Background profile update so next checkout auto-fills (fails silently if it errors)
       api.patch('/api/auth/profile', { full_name: name, phone, address }).catch(() => {});
 
-      await clearCart();
+      try {
+        await clearCart();
+      } catch {
+        // Order is placed — don't fail the confirmation over cart cleanup.
+        showToast('Order placed! Note: your cart may not be empty.', 'error');
+      }
       setOrderPlaced(order);
       showToast('Order placed successfully!');
     } catch (err) {

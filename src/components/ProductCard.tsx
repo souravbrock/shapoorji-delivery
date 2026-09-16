@@ -4,11 +4,13 @@ import { api, num, type Product } from '@/lib/api';
 import { useCart } from '@/context/CartContext';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from '@/context/RouterContext';
+import { useToast } from '@/components/Toast';
 
 export default function ProductCard({ product }: { product: Product }) {
   const { items, addToCart } = useCart();
   const { session } = useAuth();
   const { navigate } = useRouter();
+  const { showToast } = useToast();
   const [isFavorite, setIsFavorite] = useState(false);
   const [adding, setAdding] = useState(false);
   const [showQty, setShowQty] = useState(false);
@@ -53,10 +55,14 @@ export default function ProductCard({ product }: { product: Product }) {
       return;
     }
     setAdding(true);
-    await addToCart(product.id, qty);
+    try {
+      await addToCart(product.id, qty);
+      setShowQty(false);
+      setQty(initialQty);
+    } catch {
+      showToast('Could not add to cart. Please try again.', 'error');
+    }
     setAdding(false);
-    setShowQty(false);
-    setQty(initialQty);
   };
 
   const outOfStock = product.stock <= 0;

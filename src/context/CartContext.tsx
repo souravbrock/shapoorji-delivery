@@ -47,6 +47,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       await fetchCart();
     } catch (err) {
       console.error('Error adding to cart:', err);
+      throw err; // let callers show a toast instead of fake success
     }
   }, [session, fetchCart]);
 
@@ -57,6 +58,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       await fetchCart();
     } catch (err) {
       console.error('Error removing from cart:', err);
+      throw err;
     }
   }, [session, fetchCart]);
 
@@ -71,6 +73,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       await fetchCart();
     } catch (err) {
       console.error('Error updating cart:', err);
+      throw err;
     }
   }, [session, fetchCart, removeFromCart]);
 
@@ -81,6 +84,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       setItems([]);
     } catch (err) {
       console.error('Error clearing cart:', err);
+      throw err;
     }
   }, [session]);
 

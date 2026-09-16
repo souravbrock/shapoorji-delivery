@@ -21,6 +21,20 @@ function signToken(user) {
   });
 }
 
+// Browsers only delete a cookie when the expired replacement matches the
+// original's attributes. A cookie once set with SameSite=None; Secure can
+// NOT be removed by a SameSite=Lax clear (and vice versa), leaving a stale
+// "zombie" login behind. Clear both variants everywhere.
+function clearToken(res) {
+  res.clearCookie('token', { ...COOKIE_OPTS, maxAge: undefined });
+  res.clearCookie('token', { ...COOKIE_OPTS, secure: true, sameSite: 'none', maxAge: undefined });
+}
+
+function setToken(res, token) {
+  clearToken(res); // kill any stranded cookie first, then set the fresh one
+  res.cookie('token', token, COOKIE_OPTS);
+}
+
 // POST /api/auth/signup
 router.post('/signup', async (req, res, next) => {
   const { email, password, fullName } = req.body;
@@ -63,7 +77,7 @@ router.post('/signup', async (req, res, next) => {
     await conn.commit();
 
     const token = signToken({ id: userId, email });
-    res.cookie('token', token, COOKIE_OPTS);
+    setToken(res, token);
     res.json({ user: { id: userId, email } });
   } catch (err) {
     await conn.rollback();
@@ -92,7 +106,7 @@ router.post('/login', async (req, res, next) => {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
     const token = signToken(user);
-    res.cookie('token', token, COOKIE_OPTS);
+    setToken(res, token);
     res.json({ user: { id: user.id, email: user.email } });
   } catch (err) {
     next(err);
@@ -101,7 +115,7 @@ router.post('/login', async (req, res, next) => {
 
 // POST /api/auth/logout
 router.post('/logout', (req, res) => {
-  res.clearCookie('token', { ...COOKIE_OPTS, maxAge: undefined });
+  clearToken(res);
   res.json({ ok: true });
 });
 

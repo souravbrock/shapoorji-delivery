@@ -30,6 +30,16 @@ app.use(
 app.use(express.json());
 app.use(cookieParser());
 
+// API responses are live per-user data (cart, session, orders, products) —
+// never let browsers or DomainAdda's front NGINX cache them. Static files
+// under /uploads and /api/uploads are unaffected and stay cacheable.
+app.use('/api', (req, res, next) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
+  next();
+});
+
 // Serve uploaded product images.
 // The app is mounted under /api on cPanel (reddevils.co.in/api) where
 // Express sees the full request path, so serve under both /uploads

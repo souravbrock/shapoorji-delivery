@@ -1,0 +1,33 @@
+# Env files (never commit real secrets)
+.env
+.env.local
+.env.*.local
+server/.env
+server/.env.local
+
+# Build output
+dist/
+dist-ssr/
+
+# Dependencies
+node_modules/
+
+# Uploads (user content, not code)
+server/public/uploads/*
+!server/public/uploads/.gitkeep
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# Misc junk
+*.zip
+dist/whatever.zip

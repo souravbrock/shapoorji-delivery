@@ -1,18 +1,31 @@
 import type { Order, OrderItem } from '@/lib/api';
 
+function escapeHtml(value: unknown): string {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 export function generateInvoiceHTML(order: Order, items: OrderItem[]): string {
   const invoiceId = order.id.slice(0, 8).toUpperCase();
   const date = new Date(order.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
 
-  const itemsHTML = items.map((item, idx) => `
+  const itemsHTML = items.map((item, idx) => {
+    const price = Number(item.price) || 0;
+    const qty = Number(item.quantity) || 0;
+    return `
     <tr style="${idx % 2 === 0 ? 'background: #f9fafb' : ''}">
-      <td style="padding: 10px 16px; border-bottom: 1px solid #e5e7eb;">${item.product_name}</td>
-      <td style="padding: 10px 16px; border-bottom: 1px solid #e5e7eb; text-align: center;">${item.unit}</td>
-      <td style="padding: 10px 16px; border-bottom: 1px solid #e5e7eb; text-align: center;">${item.quantity}</td>
-      <td style="padding: 10px 16px; border-bottom: 1px solid #e5e7eb; text-align: right;">₹${item.price.toFixed(2)}</td>
-      <td style="padding: 10px 16px; border-bottom: 1px solid #e5e7eb; text-align: right;">₹${(item.price * item.quantity).toFixed(2)}</td>
+      <td style="padding: 10px 16px; border-bottom: 1px solid #e5e7eb;">${escapeHtml(item.product_name)}</td>
+      <td style="padding: 10px 16px; border-bottom: 1px solid #e5e7eb; text-align: center;">${escapeHtml(item.unit)}</td>
+      <td style="padding: 10px 16px; border-bottom: 1px solid #e5e7eb; text-align: center;">${escapeHtml(qty)}</td>
+      <td style="padding: 10px 16px; border-bottom: 1px solid #e5e7eb; text-align: right;">₹${price.toFixed(2)}</td>
+      <td style="padding: 10px 16px; border-bottom: 1px solid #e5e7eb; text-align: right;">₹${(price * qty).toFixed(2)}</td>
     </tr>
-  `).join('');
+  `;
+  }).join('');
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -61,10 +74,10 @@ export function generateInvoiceHTML(order: Order, items: OrderItem[]): string {
     </div>
     <div class="billing">
       <h3>Bill To</h3>
-      <p><strong>${order.customer_name}</strong></p>
-      <p>${order.delivery_address}</p>
-      <p>Phone: ${order.customer_phone}</p>
-      ${order.notes ? `<p style="margin-top: 8px; color: #6b7280;"><em>Note: ${order.notes}</em></p>` : ''}
+      <p><strong>${escapeHtml(order.customer_name)}</strong></p>
+      <p>${escapeHtml(order.delivery_address)}</p>
+      <p>Phone: ${escapeHtml(order.customer_phone)}</p>
+      ${order.notes ? `<p style="margin-top: 8px; color: #6b7280;"><em>Note: ${escapeHtml(order.notes)}</em></p>` : ''}
     </div>
     <table>
       <thead>
@@ -80,7 +93,7 @@ export function generateInvoiceHTML(order: Order, items: OrderItem[]): string {
     </table>
     <div class="total">
       <span class="label">Total Amount</span>
-      <span class="amount">₹${order.total.toFixed(2)}</span>
+      <span class="amount">₹${(Number(order.total) || 0).toFixed(2)}</span>
     </div>
     <div class="footer">
       <p>Thank you for shopping with Shapoorji Delivery!</p>

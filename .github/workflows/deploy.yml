@@ -1,0 +1,117 @@
+# Build frontend on every push to main, and optionally deploy to cPanel via SSH.
+#
+# REQUIRED GitHub Secrets (repo Settings -> Secrets and variables -> Actions):
+#   VITE_API_URL     e.g. https://api.reddevils.co.in  (bare origin, no /api suffix, no trailing /)
+#
+# OPTIONAL - only needed for auto-deploy (leave unset to just build + verify):
+#   CPANEL_HOST      e.g. server.domainadda.com  (or your cPanel server IP)
+#   CPANEL_USER      e.g. reddevil  (your cPanel username)
+#   CPANEL_SSH_KEY   private SSH key (see steps below)
+#   FRONTEND_PATH    e.g. ~/spdelivery.reddevils.co.in  (or ~/public_html)
+#   BACKEND_PATH     e.g. ~/shapoorji-api  (your Node app Application root)
+#
+# SSH KEY SETUP (one time, ~3 min):
+#   1. On your PC: ssh-keygen -t ed25519 -f ~/.ssh/cpanel-deploy -N "" -C "github-deploy"
+#   2. cPanel -> SSH Access -> Manage SSH Keys -> Import Key (paste .pub), then Authorize it.
+#      (If no Import UI: ssh into cPanel and append the .pub to ~/.ssh/authorized_keys)
+#   3. GitHub repo -> Settings -> Secrets -> Actions -> New secret CPANEL_SSH_KEY,
+#      paste the PRIVATE key content (the file without .pub).
+#   4. Add CPANEL_HOST, CPANEL_USER, FRONTEND_PATH, BACKEND_PATH secrets the same way.
+#
+# CPANEL GIT VERSION CONTROL (alternative / fallback, no secrets needed):
+#   cPanel -> Git Version Control -> Create -> Clone URL = your GitHub repo URL,
+#   Repository Path = e.g. ~/shapoorji-delivery
+#   Then on each deploy: click Pull, then copy server/ -> BACKEND_PATH and
+#   run NPM Install + Restart in Setup Node.js App.
+
+name: Build and Deploy to cPanel
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build
+        env:
+          VITE_API_URL: ${{ secrets.VITE_API_URL }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  deploy-frontend:
+    needs: build
+    # Only run when SSH secrets are configured
+    if: ${{ secrets.CPANEL_HOST != '' && secrets.CPANEL_SSH_KEY != '' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Copy dist/ to cPanel via SCP
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.CPANEL_HOST }}
+          username: ${{ secrets.CPANEL_USER }}
+          key: ${{ secrets.CPANEL_SSH_KEY }}
+          source: dist/*
+          # Strip the leading dist/ so index.html lands at the docroot, not FRONTEND_PATH/dist/
+          strip_components: 1
+          target: ${{ secrets.FRONTEND_PATH }}
+
+  deploy-backend:
+    # Only run when SSH secrets are configured
+    if: ${{ secrets.CPANEL_HOST != '' && secrets.CPANEL_SSH_KEY != '' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Pull + install + restart Node app on cPanel
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.CPANEL_HOST }}
+          username: ${{ secrets.CPANEL_USER }}
+          key: ${{ secrets.CPANEL_SSH_KEY }}
+          script: |
+            set -e
+            echo "=== backend deploy ==="
+            cd "${{ secrets.BACKEND_PATH }}"
+            # Sync code: prefer existing git checkout, else clone is a one-time manual step
+            if [ -d .git ]; then
+              git fetch origin main
+              git reset --hard origin/main
+            else
+              echo "WARN: BACKEND_PATH is not a git checkout. Clone the repo here first."
+              echo "Falling back to Git Version Control path ~/shapoorji-delivery if present."
+              if [ -d ~/shapoorji-delivery/.git ]; then
+                cd ~/shapoorji-delivery
+                git pull origin main
+                cp -r server/. "${{ secrets.BACKEND_PATH }}/"
+                cd "${{ secrets.BACKEND_PATH }}"
+              else
+                exit 1
+              fi
+            fi
+            # Install prod deps (cPanel Node selector uses this dir)
+            if command -v npm >/dev/null 2>&1; then
+              npm install --omit=dev
+            fi
+            # Trigger Passenger / Node app restart (whichever exists; ignore failures)
+            mkdir -p tmp
+            touch tmp/restart.txt || true
+            (cloudlinux-selector restart --json --interpreter nodejs --app-root "$PWD" || true)
+            echo "=== backend deploy done ==="

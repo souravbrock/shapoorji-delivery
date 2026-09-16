@@ -16,9 +16,13 @@ const uploadRoutes = require('./routes/uploads');
 const app = express();
 
 const allowedOrigins = (process.env.CORS_ORIGIN || '').split(',').map((s) => s.trim()).filter(Boolean);
+if (allowedOrigins.length === 0) {
+  console.error('FATAL: CORS_ORIGIN env var is not set. Refusing to start with open CORS.');
+  process.exit(1);
+}
 app.use(
   cors({
-    origin: allowedOrigins.length ? allowedOrigins : true,
+    origin: allowedOrigins,
     credentials: true,
   })
 );
@@ -39,10 +43,12 @@ app.use('/api/orders', orderRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/uploads', uploadRoutes);
 
-// Central error handler
+// Central error handler — log full error internally, send generic message in production
 app.use((err, req, res, next) => {
   console.error(err);
-  res.status(err.status || 500).json({ error: err.message || 'Internal server error' });
+  const isProd = process.env.NODE_ENV === 'production';
+  const message = isProd ? 'Internal server error' : err.message || 'Internal server error';
+  res.status(err.status || 500).json({ error: message });
 });
 
 const PORT = process.env.PORT || 3001;

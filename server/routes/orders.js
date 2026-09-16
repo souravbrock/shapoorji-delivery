@@ -51,16 +51,61 @@ router.get('/:id/items', async (req, res, next) => {
 });
 
 // POST /api/orders — create order + items in one transaction (checkout)
+// IMPORTANT: price/name/unit always come from the DB, never from the client.
 router.post('/', async (req, res, next) => {
   const { delivery_address, customer_name, customer_phone, notes, items } = req.body;
   if (!Array.isArray(items) || items.length === 0) {
     return res.status(400).json({ error: 'Order must include at least one item' });
   }
+  if (items.length > 100) {
+    return res.status(400).json({ error: 'Too many items in order' });
+  }
 
-  const total = items.reduce((sum, i) => sum + Number(i.price) * Number(i.quantity), 0);
+  // Basic validation of client input (product_id + quantity only)
+  for (const i of items) {
+    if (!i || !i.product_id) {
+      return res.status(400).json({ error: 'Each item must have a product_id' });
+    }
+    const qty = Number(i.quantity);
+    if (!Number.isFinite(qty) || qty <= 0 || qty > 1000) {
+      return res.status(400).json({ error: 'Invalid quantity' });
+    }
+  }
+
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
+
+    // Look up authoritative price/name/unit from DB
+    const ids = [...new Set(items.map((i) => i.product_id))];
+    const [products] = await conn.query(
+      `SELECT id, name, price, unit, is_active FROM products WHERE id IN (${ids.map(() => '?').join(',')})`,
+      ids
+    );
+    const byId = new Map(products.map((p) => [String(p.id), p]));
+
+    let total = 0;
+    const serverItems = [];
+    for (const i of items) {
+      const p = byId.get(String(i.product_id));
+      if (!p) {
+        throw Object.assign(new Error(`Product not found: ${i.product_id}`), { status: 400 });
+      }
+      if (p.is_active === 0 || p.is_active === false) {
+        throw Object.assign(new Error(`Product not available: ${p.name}`), { status: 400 });
+      }
+      const qty = Number(i.quantity);
+      const price = Number(p.price);
+      total += price * qty;
+      serverItems.push({
+        product_id: p.id,
+        product_name: p.name,
+        price,
+        quantity: qty,
+        unit: p.unit || 'each',
+      });
+    }
+    total = Math.round(total * 100) / 100; // avoid float dust
 
     const orderId = crypto.randomUUID();
     await conn.query(
@@ -69,7 +114,7 @@ router.post('/', async (req, res, next) => {
       [orderId, req.user.id, total, delivery_address || '', customer_name || '', customer_phone || '', req.user.email || '', notes || '']
     );
 
-    for (const item of items) {
+    for (const item of serverItems) {
       await conn.query(
         `INSERT INTO order_items (id, order_id, product_id, product_name, price, quantity, unit)
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
@@ -86,14 +131,14 @@ router.post('/', async (req, res, next) => {
       sendOrderEmail({
         to: req.user.email,
         subject: `Order Confirmation #${orderId.slice(0, 8).toUpperCase()}`,
-        html: renderOrderPlacedEmail(order, items),
+        html: renderOrderPlacedEmail(order, serverItems),
       });
     }
     if (process.env.ADMIN_NOTIFY_EMAIL) {
       sendOrderEmail({
         to: process.env.ADMIN_NOTIFY_EMAIL,
         subject: `New order #${orderId.slice(0, 8).toUpperCase()}`,
-        html: renderOrderPlacedEmail(order, items),
+        html: renderOrderPlacedEmail(order, serverItems),
       });
     }
 

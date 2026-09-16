@@ -31,22 +31,31 @@ async function sendOrderEmail({ to, subject, html }) {
   }
 }
 
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function renderOrderPlacedEmail(order, items) {
   const rows = items
     .map(
       (i) =>
-        `<tr><td>${i.product_name}</td><td>${i.quantity} ${i.unit}</td><td>₹${Number(i.price).toFixed(2)}</td></tr>`
+        `<tr><td>${escapeHtml(i.product_name)}</td><td>${escapeHtml(i.quantity)} ${escapeHtml(i.unit)}</td><td>₹${Number(i.price).toFixed(2)}</td></tr>`
     )
     .join('');
   return `
-    <h2>Order Confirmation — #${order.id.slice(0, 8)}</h2>
-    <p>Hi ${order.customer_name}, thanks for your order!</p>
+    <h2>Order Confirmation — #${escapeHtml(String(order.id).slice(0, 8))}</h2>
+    <p>Hi ${escapeHtml(order.customer_name)}, thanks for your order!</p>
     <table border="1" cellpadding="6" cellspacing="0">
       <tr><th>Item</th><th>Qty</th><th>Price</th></tr>
       ${rows}
     </table>
     <p><strong>Total: ₹${Number(order.total).toFixed(2)}</strong></p>
-    <p>Delivery address: ${order.delivery_address}</p>
+    <p>Delivery address: ${escapeHtml(order.delivery_address)}</p>
   `;
 }
 

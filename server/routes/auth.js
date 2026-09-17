@@ -4,6 +4,36 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const pool = require('../db');
 const { requireAuth } = require('../middleware/auth');
+const { sendOrderEmail, renderVerifyEmailText, renderVerifyEmailHtml } = require('../utils/mailer');
+
+function makeCode() {
+  return String(Math.floor(100000 + Math.random() * 900000));
+}
+
+function hashCode(code) {
+  return crypto.createHash('sha256').update(String(code)).digest('hex');
+}
+
+// (Re)issues a 6-digit code valid for 10 minutes and mails it.
+// Fire-and-forget mail — a slow SMTP server never blocks signup.
+async function sendVerificationCode(db, userId, email) {
+  const code = makeCode();
+  await db.query(
+    `UPDATE users
+       SET verification_code_hash = ?,
+           verification_expires_at = DATE_ADD(NOW(), INTERVAL 10 MINUTE),
+           verification_attempts = 0,
+           verification_sent_at = NOW()
+     WHERE id = ?`,
+    [hashCode(code), userId]
+  );
+  sendOrderEmail({
+    to: email,
+    subject: 'Your Shapoorji Delivery verification code',
+    text: renderVerifyEmailText(code),
+    html: renderVerifyEmailHtml(code),
+  });
+}
 
 const router = express.Router();
 
@@ -76,9 +106,11 @@ router.post('/signup', async (req, res, next) => {
 
     await conn.commit();
 
+    await sendVerificationCode(pool, userId, email);
+
     const token = signToken({ id: userId, email });
     setToken(res, token);
-    res.json({ user: { id: userId, email } });
+    res.json({ user: { id: userId, email, emailVerified: false } });
   } catch (err) {
     await conn.rollback();
     next(err);
@@ -94,7 +126,7 @@ router.post('/login', async (req, res, next) => {
     return res.status(400).json({ error: 'Email and password are required' });
   }
   try {
-    const [rows] = await pool.query('SELECT id, email, password_hash FROM users WHERE email = ?', [
+    const [rows] = await pool.query('SELECT id, email, password_hash, email_verified FROM users WHERE email = ?', [
       email,
     ]);
     if (!rows.length) {
@@ -107,7 +139,7 @@ router.post('/login', async (req, res, next) => {
     }
     const token = signToken(user);
     setToken(res, token);
-    res.json({ user: { id: user.id, email: user.email } });
+    res.json({ user: { id: user.id, email: user.email, emailVerified: !!user.email_verified } });
   } catch (err) {
     next(err);
   }
@@ -124,7 +156,72 @@ router.get('/session', requireAuthOptional, async (req, res, next) => {
   if (!req.user) return res.json({ user: null, profile: null });
   try {
     const [rows] = await pool.query('SELECT * FROM profiles WHERE id = ?', [req.user.id]);
-    res.json({ user: req.user, profile: rows[0] || null });
+    const [urows] = await pool.query('SELECT email_verified FROM users WHERE id = ?', [req.user.id]);
+    res.json({
+      user: { ...req.user, emailVerified: !!urows[0]?.email_verified },
+      profile: rows[0] || null,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/auth/verify-email { code } — confirm own email address
+router.post('/verify-email', requireAuth, async (req, res, next) => {
+  const { code } = req.body;
+  if (!code) {
+    return res.status(400).json({ error: 'Verification code is required' });
+  }
+  try {
+    const [rows] = await pool.query(
+      'SELECT email_verified, verification_code_hash, verification_expires_at, verification_attempts FROM users WHERE id = ?',
+      [req.user.id]
+    );
+    const u = rows[0];
+    if (!u) return res.status(404).json({ error: 'Account not found' });
+    if (u.email_verified) return res.json({ ok: true, already: true });
+    if ((u.verification_attempts || 0) >= 5) {
+      return res.status(429).json({ error: 'Too many wrong attempts — please request a new code.' });
+    }
+    if (
+      !u.verification_code_hash ||
+      !u.verification_expires_at ||
+      new Date(u.verification_expires_at) < new Date()
+    ) {
+      return res.status(400).json({ error: 'Code expired — please request a new one.' });
+    }
+    const a = Buffer.from(hashCode(String(code).trim()), 'hex');
+    const b = Buffer.from(u.verification_code_hash, 'hex');
+    const match = a.length === b.length && crypto.timingSafeEqual(a, b);
+    if (!match) {
+      await pool.query('UPDATE users SET verification_attempts = verification_attempts + 1 WHERE id = ?', [req.user.id]);
+      return res.status(400).json({ error: 'Incorrect code. Please try again.' });
+    }
+    await pool.query(
+      'UPDATE users SET email_verified = 1, verification_code_hash = NULL, verification_expires_at = NULL, verification_attempts = 0 WHERE id = ?',
+      [req.user.id]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/auth/resend-code — issue a fresh code (60s cooldown)
+router.post('/resend-code', requireAuth, async (req, res, next) => {
+  try {
+    const [rows] = await pool.query(
+      'SELECT email_verified, verification_sent_at FROM users WHERE id = ?',
+      [req.user.id]
+    );
+    const u = rows[0];
+    if (!u) return res.status(404).json({ error: 'Account not found' });
+    if (u.email_verified) return res.json({ ok: true, already: true });
+    if (u.verification_sent_at && Date.now() - new Date(u.verification_sent_at).getTime() < 60 * 1000) {
+      return res.status(429).json({ error: 'Please wait a minute before requesting another code.' });
+    }
+    await sendVerificationCode(pool, req.user.id, req.user.email);
+    res.json({ ok: true });
   } catch (err) {
     next(err);
   }

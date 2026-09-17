@@ -7,6 +7,7 @@ import Footer from '@/components/Footer';
 import HomePage from '@/pages/HomePage';
 import ShopPage from '@/pages/ShopPage';
 import AuthPage from '@/pages/AuthPage';
+import VerifyEmailPage from '@/pages/VerifyEmailPage';
 import ProductDetailPage from '@/pages/ProductDetailPage';
 import CartPage from '@/pages/CartPage';
 import CheckoutPage from '@/pages/CheckoutPage';
@@ -23,6 +24,7 @@ function AppContent() {
   if (path === '/' || path === '') return <><Header /><HomePage /><Footer /></>;
   if (path === '/shop') return <><Header /><ShopPage /><Footer /></>;
   if (path === '/auth') return <><AuthPage /></>;
+  if (path === '/verify-email') return <><VerifyEmailPage /></>;
   if (path === '/cart') return <><Header /><CartPage /><Footer /></>;
   if (path === '/checkout') return <><Header /><CheckoutPage /><Footer /></>;
   if (path === '/favorites') return <><Header /><FavoritesPage /><Footer /></>;

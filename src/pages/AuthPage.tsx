@@ -26,19 +26,25 @@ export default function AuthPage() {
         setLoading(false);
         return;
       }
-      const { error } = await signUp(email, password, fullName);
+      const { error, emailVerified } = await signUp(email, password, fullName);
       if (error) {
         setError(error);
         setLoading(false);
-      } else {
+      } else if (emailVerified) {
         showToast('Account created! You are now signed in.', 'success');
         navigate('/');
+      } else {
+        showToast('Account created! Check your email for the verification code.', 'success');
+        navigate('/verify-email');
       }
     } else {
-      const { error } = await signIn(email, password);
+      const { error, emailVerified } = await signIn(email, password);
       if (error) {
         setError(error);
         setLoading(false);
+      } else if (emailVerified === false) {
+        showToast('Please verify your email to continue.', 'error');
+        navigate('/verify-email');
       } else {
         showToast('Welcome back!', 'success');
         navigate('/');

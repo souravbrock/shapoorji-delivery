@@ -44,6 +44,13 @@ export default function AccountPage() {
     <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8">
       <h1 className="font-display font-bold text-2xl sm:text-3xl text-gray-900 mb-6">My Account</h1>
 
+      {session.user.emailVerified === false && (
+        <div className="card p-4 mb-6 border-amber-200 bg-amber-50 flex items-center justify-between gap-3 flex-wrap">
+          <p className="text-sm text-amber-800">Your email is not verified — you can't place orders yet.</p>
+          <button onClick={() => navigate('/verify-email')} className="btn-primary text-sm px-4 py-2">Verify Now</button>
+        </div>
+      )}
+
       {/* Profile card */}
       <div className="card p-6 mb-6">
         <div className="flex items-center gap-4 mb-6">

@@ -91,6 +91,12 @@ router.post('/', async (req, res, next) => {
     }
   }
 
+  // Unverified emails cannot check out
+  const [meRows] = await pool.query('SELECT email_verified FROM users WHERE id = ?', [req.user.id]);
+  if (!meRows[0] || !meRows[0].email_verified) {
+    return res.status(403).json({ error: 'Please verify your email before placing an order.' });
+  }
+
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();

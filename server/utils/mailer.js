@@ -129,6 +129,27 @@ function renderOrderStatusEmail(order) {
   `;
 }
 
+function renderVerifyEmailText(code) {
+  return [
+    'SHAPOORJI GROCERY DELIVERY',
+    '',
+    'Verify your email address to start ordering.',
+    '',
+    `Your verification code is: ${code}`,
+    '',
+    'It expires in 10 minutes. If you did not create this account, ignore this mail.',
+  ].join('\n');
+}
+
+function renderVerifyEmailHtml(code) {
+  return `
+    <h2>Verify your email — Shapoorji Delivery</h2>
+    <p>Enter this code on the website to verify your email address:</p>
+    <p style="font-size:28px;font-weight:800;letter-spacing:6px;">${escapeHtml(code)}</p>
+    <p>It expires in 10 minutes. If you did not create this account, ignore this mail.</p>
+  `;
+}
+
 function renderOrderStatusText(order) {
   const statusLabels = {
     received: 'Received',
@@ -149,6 +170,8 @@ function renderOrderStatusText(order) {
 
 module.exports = {
   sendOrderEmail,
+  renderVerifyEmailText,
+  renderVerifyEmailHtml,
   renderOrderReceiptText,
   renderOrderReceiptHtml,
   renderOrderStatusEmail,

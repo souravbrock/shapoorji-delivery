@@ -58,6 +58,19 @@ export default function CheckoutPage() {
     return null;
   }
 
+  if (session.user.emailVerified === false) {
+    return (
+      <div className="max-w-2xl mx-auto px-4 sm:px-6 py-16 text-center">
+        <h2 className="font-display font-bold text-2xl text-gray-900 mb-2">Verify your email first</h2>
+        <p className="text-gray-600 mb-2">
+          We sent a 6-digit code to <span className="font-semibold">{session.user.email}</span>.
+          Enter it to unlock checkout.
+        </p>
+        <button onClick={() => navigate('/verify-email')} className="btn-primary mt-4">Verify Email</button>
+      </div>
+    );
+  }
+
   if (items.length === 0 && !orderPlaced) {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-16 text-center">

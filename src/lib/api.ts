@@ -147,4 +147,4 @@ export type Review = {
   profiles?: { full_name: string };
 };
 
-export type SessionUser = { id: string; email: string };
+export type SessionUser = { id: string; email: string; emailVerified?: boolean };

@@ -5,8 +5,8 @@ type AuthContextType = {
   session: { user: SessionUser } | null;
   profile: Profile | null;
   loading: boolean;
-  signUp: (email: string, password: string, fullName: string) => Promise<{ error: string | null }>;
-  signIn: (email: string, password: string) => Promise<{ error: string | null }>;
+  signUp: (email: string, password: string, fullName: string) => Promise<{ error: string | null; emailVerified?: boolean }>;
+  signIn: (email: string, password: string) => Promise<{ error: string | null; emailVerified?: boolean }>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 };
@@ -47,7 +47,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
       setSession({ user });
       await loadSession();
-      return { error: null };
+      return { error: null, emailVerified: !!user.emailVerified };
     } catch (err) {
       return { error: err instanceof Error ? err.message : 'Sign up failed' };
     }
@@ -58,7 +58,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { user } = await api.post<{ user: SessionUser }>('/api/auth/login', { email, password });
       setSession({ user });
       await loadSession();
-      return { error: null };
+      return { error: null, emailVerified: !!user.emailVerified };
     } catch (err) {
       return { error: err instanceof Error ? err.message : 'Sign in failed' };
     }

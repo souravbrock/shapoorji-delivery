@@ -3,7 +3,8 @@ import { Package, Clock, CheckCircle, Truck, XCircle, Download, ChevronRight, Ar
 import { api, num, type Order, type OrderItem, type OrderStatus } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from '@/context/RouterContext';
-import { generateInvoiceHTML } from '@/lib/invoice';
+import { useToast } from '@/components/Toast';
+import { downloadInvoicePDF } from '@/lib/invoice';
 
 const statusConfig: Record<OrderStatus, { label: string; icon: React.ComponentType<{ className?: string }>; color: string; step: number }> = {
   received: { label: 'Order Received', icon: Clock, color: 'text-blue-600 bg-blue-50', step: 1 },
@@ -16,8 +17,10 @@ const statusConfig: Record<OrderStatus, { label: string; icon: React.ComponentTy
 export default function OrdersPage() {
   const { session } = useAuth();
   const { navigate } = useRouter();
+  const { showToast } = useToast();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [downloading, setDownloading] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
 
@@ -39,15 +42,16 @@ export default function OrdersPage() {
     setOrderItems(data);
   };
 
-  const downloadInvoice = (order: Order, items: OrderItem[]) => {
-    const html = generateInvoiceHTML(order, items);
-    const blob = new Blob([html], { type: 'text/html' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `invoice-${order.id.slice(0, 8).toUpperCase()}.html`;
-    a.click();
-    URL.revokeObjectURL(url);
+  const downloadInvoice = async (order: Order, items: OrderItem[]) => {
+    if (downloading) return;
+    setDownloading(true);
+    try {
+      await downloadInvoicePDF(order, items);
+    } catch (err) {
+      console.error('Invoice PDF failed:', err);
+      showToast('Could not generate the invoice PDF. Please try again.', 'error');
+    }
+    setDownloading(false);
   };
 
   if (!session) {
@@ -80,9 +84,9 @@ export default function OrdersPage() {
                 Placed on {new Date(selectedOrder.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
               </p>
             </div>
-            <button onClick={() => downloadInvoice(selectedOrder, orderItems)} className="btn-secondary text-sm">
+            <button onClick={() => downloadInvoice(selectedOrder, orderItems)} disabled={downloading} className="btn-secondary text-sm disabled:opacity-50">
               <Download className="w-4 h-4" />
-              Invoice
+              {downloading ? 'Preparing PDF…' : 'Invoice (PDF)'}
             </button>
           </div>
 

@@ -103,3 +103,58 @@ export function generateInvoiceHTML(order: Order, items: OrderItem[]): string {
 </body>
 </html>`;
 }
+
+// Render the same invoice design to a PDF download (A4, multi-page safe).
+// Works purely in the browser: the invoice HTML is rasterized offscreen,
+// so the PDF keeps the exact on-screen look.
+export async function downloadInvoicePDF(order: Order, items: OrderItem[]): Promise<void> {
+  // Lazy-loaded so the PDF libraries don't weigh down the initial page load.
+  const [{ default: jsPDF }, { default: html2canvas }] = await Promise.all([
+    import('jspdf'),
+    import('html2canvas'),
+  ]);
+  const invoiceId = order.id.slice(0, 8).toUpperCase();
+  const full = generateInvoiceHTML(order, items);
+  const doc = new DOMParser().parseFromString(full, 'text/html');
+  const css = Array.from(doc.querySelectorAll('style'))
+    .map((s) => s.textContent || '')
+    .join('\n')
+    // Scope the template's `body` rule to our container so the live page
+    // never flashes grey/padded while rendering offscreen.
+    .replace(/\bbody\s*\{/g, '.pdf-root{');
+
+  const host = document.createElement('div');
+  host.style.cssText = 'position:fixed;left:-10000px;top:0;width:700px;background:#ffffff;';
+  const style = document.createElement('style');
+  style.textContent = css;
+  const root = document.createElement('div');
+  root.className = 'pdf-root';
+  root.innerHTML = doc.body.innerHTML;
+  host.appendChild(style);
+  host.appendChild(root);
+  document.body.appendChild(host);
+  try {
+    const canvas = await html2canvas(host, { scale: 2, backgroundColor: '#ffffff', logging: false });
+    const img = canvas.toDataURL('image/png');
+    const pdf = new jsPDF({ unit: 'mm', format: 'a4' });
+    const pageW = 210;
+    const pageH = 297;
+    const imgW = pageW;
+    const imgH = (canvas.height * pageW) / canvas.width;
+    if (imgH <= pageH) {
+      pdf.addImage(img, 'PNG', 0, 0, imgW, imgH);
+    } else {
+      // Slice one tall image across pages via vertical offsets.
+      let pos = 0;
+      while (true) {
+        pdf.addImage(img, 'PNG', 0, -pos, imgW, imgH);
+        pos += pageH;
+        if (pos >= imgH) break;
+        pdf.addPage();
+      }
+    }
+    pdf.save(`invoice-${invoiceId}.pdf`);
+  } finally {
+    document.body.removeChild(host);
+  }
+}

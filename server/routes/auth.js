@@ -14,6 +14,13 @@ function hashCode(code) {
   return crypto.createHash('sha256').update(String(code)).digest('hex');
 }
 
+// DB DATETIME strings are IST wall time (see db.js) — parse with an
+// explicit offset so server-side comparisons are correct regardless
+// of the server's own timezone.
+function dbTime(s) {
+  return new Date(String(s).replace(' ', 'T') + '+05:30').getTime();
+}
+
 // (Re)issues a 6-digit code valid for 10 minutes and mails it.
 // Fire-and-forget mail — a slow SMTP server never blocks signup.
 async function sendVerificationCode(db, userId, email) {
@@ -186,7 +193,7 @@ router.post('/verify-email', requireAuth, async (req, res, next) => {
     if (
       !u.verification_code_hash ||
       !u.verification_expires_at ||
-      new Date(u.verification_expires_at) < new Date()
+      dbTime(u.verification_expires_at) < Date.now()
     ) {
       return res.status(400).json({ error: 'Code expired — please request a new one.' });
     }
@@ -217,7 +224,7 @@ router.post('/resend-code', requireAuth, async (req, res, next) => {
     const u = rows[0];
     if (!u) return res.status(404).json({ error: 'Account not found' });
     if (u.email_verified) return res.json({ ok: true, already: true });
-    if (u.verification_sent_at && Date.now() - new Date(u.verification_sent_at).getTime() < 60 * 1000) {
+    if (u.verification_sent_at && Date.now() - dbTime(u.verification_sent_at) < 60 * 1000) {
       return res.status(429).json({ error: 'Please wait a minute before requesting another code.' });
     }
     await sendVerificationCode(pool, req.user.id, req.user.email);

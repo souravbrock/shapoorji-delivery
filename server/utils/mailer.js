@@ -53,7 +53,11 @@ function moneyLine(n) {
 
 function fmtDateTime(d) {
   try {
-    return new Date(d).toLocaleString('en-IN', {
+    // DB DATETIME strings are IST wall time — pin the offset explicitly
+    // because the server itself runs in a different timezone.
+    const s = d instanceof Date ? d.toISOString() : String(d ?? '').replace(' ', 'T');
+    const withZone = /[+-]\d{2}:?\d{2}$|Z$/.test(s) ? s : `${s}+05:30`;
+    return new Date(withZone).toLocaleString('en-IN', {
       day: 'numeric', month: 'short', year: 'numeric',
       hour: 'numeric', minute: '2-digit', hour12: true,
     });

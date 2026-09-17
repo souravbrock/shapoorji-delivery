@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Package, LayoutDashboard, Plus, Pencil, Trash2, X, Search, Clock, CheckCircle, Truck, XCircle, TrendingUp, IndianRupee, ShoppingBag, Upload, Loader2, Bell, Send } from 'lucide-react';
-import { api, num, type Product, type Category, type Order, type OrderStatus, type OrderItem } from '@/lib/api';
+import { api, num, parseDbDate, type Product, type Category, type Order, type OrderStatus, type OrderItem } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from '@/context/RouterContext';
 import { useToast } from '@/components/Toast';
@@ -127,7 +127,7 @@ function DashboardTab({ products, orders, onGoOrders }: { products: Product[]; o
                   <tr key={order.id} className="border-b border-gray-50 last:border-0">
                     <td className="py-3 px-3 font-mono text-xs">#{order.id.slice(0, 8).toUpperCase()}</td>
                     <td className="py-3 px-3">{order.customer_name}</td>
-                    <td className="py-3 px-3 text-gray-500">{new Date(order.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</td>
+                    <td className="py-3 px-3 text-gray-500">{parseDbDate(order.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</td>
                     <td className="py-3 px-3 text-right font-semibold">₹{num(order.total).toFixed(0)}</td>
                     <td className="py-3 px-3 text-center"><StatusBadge status={order.status} /></td>
                   </tr>
@@ -462,7 +462,7 @@ const updateStatus = async (orderId: string, status: OrderStatus) => {
                   <div className="min-w-0">
                     <p className="font-semibold text-gray-900">#{order.id.slice(0, 8).toUpperCase()}</p>
                     <p className="text-sm text-gray-500 truncate">{order.customer_name} · {order.customer_phone}</p>
-                    <p className="text-xs text-gray-400 mt-0.5">{new Date(order.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</p>
+                    <p className="text-xs text-gray-400 mt-0.5">{parseDbDate(order.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</p>
                   </div>
                 </button>
                 <div className="text-right shrink-0">

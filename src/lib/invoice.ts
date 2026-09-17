@@ -1,4 +1,5 @@
 import type { Order, OrderItem } from '@/lib/api';
+import { parseDbDate } from '@/lib/api';
 
 function escapeHtml(value: unknown): string {
   return String(value ?? '')
@@ -11,7 +12,7 @@ function escapeHtml(value: unknown): string {
 
 export function generateInvoiceHTML(order: Order, items: OrderItem[]): string {
   const invoiceId = order.id.slice(0, 8).toUpperCase();
-  const date = new Date(order.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
+  const date = parseDbDate(order.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
 
   const itemsHTML = items.map((item, idx) => {
     const price = Number(item.price) || 0;

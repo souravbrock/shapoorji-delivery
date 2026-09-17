@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Package, Clock, CheckCircle, Truck, XCircle, Download, ChevronRight, ArrowLeft } from 'lucide-react';
-import { api, num, type Order, type OrderItem, type OrderStatus } from '@/lib/api';
+import { api, num, parseDbDate, type Order, type OrderItem, type OrderStatus } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from '@/context/RouterContext';
 import { useToast } from '@/components/Toast';
@@ -81,7 +81,7 @@ export default function OrdersPage() {
             <div>
               <h1 className="font-display font-bold text-2xl text-gray-900">Order #{selectedOrder.id.slice(0, 8).toUpperCase()}</h1>
               <p className="text-sm text-gray-500 mt-1">
-                Placed on {new Date(selectedOrder.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                Placed on {parseDbDate(selectedOrder.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
               </p>
             </div>
             <button onClick={() => downloadInvoice(selectedOrder, orderItems)} disabled={downloading} className="btn-secondary text-sm disabled:opacity-50">
@@ -203,7 +203,7 @@ export default function OrdersPage() {
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-gray-900">Order #{order.id.slice(0, 8).toUpperCase()}</p>
                   <p className="text-sm text-gray-500">
-                    {new Date(order.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} · ₹{num(order.total).toFixed(0)}
+                    {parseDbDate(order.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} · ₹{num(order.total).toFixed(0)}
                   </p>
                   <span className={`badge ${config.color} mt-1`}>{config.label}</span>
                 </div>

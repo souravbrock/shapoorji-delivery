@@ -15,4 +15,13 @@ const pool = mysql.createPool({
   decimalNumbers: true,
 });
 
+// The cPanel server runs in a US timezone, but the store lives in IST.
+// Pin every pooled connection to +05:30 so CURRENT_TIMESTAMP / NOW()
+// (order times, OTP expiry, counters) are all stored as IST wall time.
+pool.pool.on('connection', (conn) => {
+  conn.query("SET time_zone = '+05:30'", (err) => {
+    if (err) console.error('Failed to set DB timezone:', err.message);
+  });
+});
+
 module.exports = pool;

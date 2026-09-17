@@ -41,6 +41,16 @@ export function num(v: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+// DB DATETIME strings ("YYYY-MM-DD HH:mm:ss") are stored as IST wall time
+// (see server/db.js). Parse with an explicit offset so every browser shows
+// the true order time instead of shifting it by the viewer's zone.
+export function parseDbDate(v: string | Date): Date {
+  if (v instanceof Date) return v;
+  const s = String(v ?? '').trim().replace(' ', 'T');
+  if (/[+-]\d{2}:?\d{2}$|Z$/.test(s)) return new Date(s);
+  return new Date(`${s}+05:30`);
+}
+
 export const api = {
   get: <T>(path: string) => request<T>(path),
   post: <T>(path: string, data?: unknown) =>

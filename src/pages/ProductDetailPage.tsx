@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Heart, Star, ShoppingCart, ArrowLeft, Plus, Minus, Package } from 'lucide-react';
-import { api, num, type Product, type Review } from '@/lib/api';
+import { api, num, parseDbDate, type Product, type Review } from '@/lib/api';
 import { useRouter } from '@/context/RouterContext';
 import { useAuth } from '@/context/AuthContext';
 import { useCart } from '@/context/CartContext';
@@ -275,7 +275,7 @@ export default function ProductDetailPage({ productId }: { productId: string }) 
                       </div>
                     </div>
                     {review.comment && <p className="text-sm text-gray-600 leading-relaxed">{review.comment}</p>}
-                    <p className="text-xs text-gray-400 mt-2">{new Date(review.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
+                    <p className="text-xs text-gray-400 mt-2">{parseDbDate(review.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
                   </div>
                 ))}
               </div>

@@ -150,6 +150,32 @@ async function notifyNewOrderTelegram(order, items) {
   return { sent, total: jobs.length };
 }
 
+function buildStatusMessage(order) {
+  return [
+    '📦 ORDER UPDATE - SHAPOORJI DELIVERY',
+    DIV,
+    `🆔 Order: ${order.order_number || shortId(order)}`,
+    `📄 Invoice: ${order.invoice_number || '—'}`,
+    `👤 Customer: ${order.customer_name || '—'}`,
+    `📌 Status: ${statusText(order.status)}`,
+    `💰 Amount: ${money2(order.total)}`,
+    FOOTER,
+  ].join('\n');
+}
+
+// Status-change alert to all tiers. Never throws.
+async function notifyStatusChangeTelegram(order) {
+  if (!isConfigured()) return { sent: 0, skipped: true };
+  const t = tiers();
+  const text = buildStatusMessage(order);
+  const jobs = [...t.admin, ...t.manager, ...t.staff].map((id) => tgSend(id, text));
+  if (!jobs.length) return { sent: 0, skipped: true };
+  const results = await Promise.all(jobs);
+  const sent = results.filter((r) => r.ok).length;
+  console.log(`Telegram status dispatch: ${sent}/${jobs.length} delivered`);
+  return { sent, total: jobs.length };
+}
+
 function telegramStatus() {
   const t = tiers();
   return {
@@ -178,10 +204,12 @@ async function sendTestDispatch() {
 
 module.exports = {
   notifyNewOrderTelegram,
+  notifyStatusChangeTelegram,
   telegramStatus,
   sendTestDispatch,
   // exported for tests/previews, not used by routes directly
   buildAdminMessage,
   buildManagerMessage,
   buildStaffMessage,
+  buildStatusMessage,
 };

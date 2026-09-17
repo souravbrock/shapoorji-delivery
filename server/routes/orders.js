@@ -3,7 +3,7 @@ const crypto = require('crypto');
 const pool = require('../db');
 const { requireAuth, requireAdmin } = require('../middleware/auth');
 const { sendOrderEmail, renderOrderReceiptText, renderOrderReceiptHtml, renderOrderStatusEmail, renderOrderStatusText } = require('../utils/mailer');
-const { notifyNewOrderTelegram } = require('../utils/telegram');
+const { notifyNewOrderTelegram, notifyStatusChangeTelegram } = require('../utils/telegram');
 
 const PAYMENT_METHOD = 'Pay on Delivery (Cash / UPI QR)';
 
@@ -191,14 +191,19 @@ router.post('/', async (req, res, next) => {
 });
 
 // PATCH /api/orders/:id/status { status } — admin only
-router.patch('/:id/status', requireAdmin, async (req, res, next) => {
+// NOTE: requireAuth must run before requireAdmin (it sets req.user),
+// otherwise every call crashes with a 500 and nothing is sent.
+router.patch('/:id/status', requireAuth, requireAdmin, async (req, res, next) => {
   const { status } = req.body;
   const allowed = ['received', 'packed', 'out_for_delivery', 'delivered', 'cancelled'];
   if (!allowed.includes(status)) {
     return res.status(400).json({ error: 'Invalid status' });
   }
   try {
-    await pool.query('UPDATE orders SET status = ? WHERE id = ?', [status, req.params.id]);
+    const [result] = await pool.query('UPDATE orders SET status = ? WHERE id = ?', [status, req.params.id]);
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
     const [rows] = await pool.query('SELECT * FROM orders WHERE id = ?', [req.params.id]);
     const order = rows[0];
     const adminEmail = process.env.ADMIN_NOTIFY_EMAIL;
@@ -220,6 +225,10 @@ router.patch('/:id/status', requireAdmin, async (req, res, next) => {
         html: renderOrderStatusEmail(order),
       });
     }
+
+    // Telegram status alert to all tiers — fire-and-forget.
+    if (order) notifyStatusChangeTelegram(order);
+
     res.json(order);
   } catch (err) {
     next(err);

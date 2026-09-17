@@ -26,6 +26,8 @@ export default function HomePage() {
   const iconMap: Record<string, string> = {
     'Apple': '🍎', 'Carrot': '🥕', 'Milk': '🥛', 'Croissant': '🥐',
     'Coffee': '☕', 'Cookie': '🍪', 'Wheat': '🌾', 'Trash2': '🧹',
+    'ShoppingBasket': '🧺', 'CupSoda': '🥤', 'ShoppingBag': '🛍️',
+    'Store': '🏪', 'Package': '📦', 'Egg': '🥚',
   };
 
   return (

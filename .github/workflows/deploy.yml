@@ -1,19 +1,25 @@
-# Build frontend on every push to main, deploy to cPanel via FTP (no SSH needed).
-# SSH deploy is kept as fallback once DomainAdda enables shell access.
+# Build frontend on every push to main, deploy everything to cPanel via FTP.
+# (SSH from GitHub runners is blocked by the host firewall — connection reset
+# on port 22 — so all deploys use FTP. Restart is via Passenger's restart.txt.)
 #
 # REQUIRED GitHub Secrets:
-#   VITE_API_URL  e.g. https://reddevils.co.in (bare origin, no /api suffix, no trailing /)
-#   FTP_SERVER    e.g. kaveri.domainadda.com (from cPanel FTP Accounts -> Configure)
-#   FTP_USERNAME  e.g. github@reddevils.co.in (must point to /public_html/spdelivery)
-#   FTP_PASSWORD  password for that FTP account
+#   VITE_API_URL   e.g. https://reddevils.co.in (bare origin, no /api suffix, no trailing /)
 #
-# OPTIONAL (SSH, only works after DomainAdda enables jailed shell):
-#   CPANEL_HOST, CPANEL_USER, CPANEL_SSH_KEY, CPANEL_PORT, FRONTEND_PATH, BACKEND_PATH
+# FRONTEND (FTP account rooted at the site docroot):
+#   FTP_SERVER     e.g. kaveri.domainadda.com
+#   FTP_USERNAME   e.g. github@reddevils.co.in (home = /home/reddevil/public_html/spdelivery)
+#   FTP_PASSWORD   password for that FTP account
 #
-# BACKEND (no SSH? use this, no secrets needed):
-#   cPanel -> Git Version Control -> Clone https://github.com/souravbrock/shapoorji-delivery
-#   to ~/shapoorji-delivery -> on each deploy click Pull, copy server/* to
-#   /home/reddevil/shapoorji-api -> Setup Node.js App -> Run NPM Install -> Restart.
+# BACKEND (separate FTP account rooted at the Node app root):
+#   FTP_API_USERNAME  e.g. github-api@reddevils.co.in (home = /home/reddevil/shapoorji-api)
+#   FTP_API_PASSWORD  password for that FTP account
+#   (FTP_SERVER is reused as the host.)
+#   NOTE: if server/package.json gains new dependencies, click
+#   "Run NPM Install" once in Setup Node.js App — FTP cannot run npm.
+#
+# BACKEND MANUAL FALLBACK (no secrets needed):
+#   cPanel -> Git Version Control -> ~/shapoorji-delivery -> Pull,
+#   copy server/* to /home/reddevil/shapoorji-api -> Restart.
 
 name: Build and Deploy to cPanel
 
@@ -86,92 +92,62 @@ jobs:
             **/.git*
             **/.DS_Store
 
-  deploy-frontend-ssh:
-    needs: build
+  deploy-backend-ftp:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: dist
-          path: dist/
+      - uses: actions/checkout@v4
 
-      # NOTE: secrets cannot be used in jobs.<id>.if, so we gate on a step instead.
-      - name: Check SSH secrets configured
+      - name: Check backend FTP secrets configured
         id: gate
         run: |
-          if [ -z "$CPANEL_HOST" ] || [ -z "$CPANEL_SSH_KEY" ]; then
+          if [ -z "$FTP_SERVER" ] || [ -z "$FTP_API_USERNAME" ] || [ -z "$FTP_API_PASSWORD" ]; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
-            echo "SSH secrets not configured, skipping frontend SSH deploy."
+            echo "Backend FTP secrets not configured, skipping backend FTP deploy."
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
         env:
-          CPANEL_HOST: ${{ secrets.CPANEL_HOST }}
-          CPANEL_SSH_KEY: ${{ secrets.CPANEL_SSH_KEY }}
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_API_USERNAME: ${{ secrets.FTP_API_USERNAME }}
+          FTP_API_PASSWORD: ${{ secrets.FTP_API_PASSWORD }}
 
-      - name: Copy dist/ to cPanel via SCP
+      - name: Upload server/ to the Node app root via FTP
         if: steps.gate.outputs.skip != 'true'
-        uses: appleboy/scp-action@v0.1.7
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
-          host: ${{ secrets.CPANEL_HOST }}
-          username: ${{ secrets.CPANEL_USER }}
-          key: ${{ secrets.CPANEL_SSH_KEY }}
-          port: ${{ secrets.CPANEL_PORT || 22 }}
-          source: dist/*
-          # Strip the leading dist/ so index.html lands at the docroot, not FRONTEND_PATH/dist/
-          strip_components: 1
-          target: ${{ secrets.FRONTEND_PATH }}
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_API_USERNAME }}
+          password: ${{ secrets.FTP_API_PASSWORD }}
+          protocol: ftp
+          port: 21
+          local-dir: ./server/
+          # IMPORTANT: this FTP account's home directory must BE
+          # /home/reddevil/shapoorji-api (set in cPanel -> FTP Accounts).
+          server-dir: ./
+          dangerous-clean-slate: false
+          exclude: |
+            **/.git*
+            **/.DS_Store
+            **/node_modules/**
+            public/uploads/**
+            .env
 
-  deploy-backend:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check SSH secrets configured
-        id: gate
+      - name: Trigger Passenger restart
+        if: steps.gate.outputs.skip != 'true'
         run: |
-          if [ -z "$CPANEL_HOST" ] || [ -z "$CPANEL_SSH_KEY" ]; then
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-            echo "SSH secrets not configured, skipping backend deploy."
-          else
-            echo "skip=false" >> "$GITHUB_OUTPUT"
-          fi
-        env:
-          CPANEL_HOST: ${{ secrets.CPANEL_HOST }}
-          CPANEL_SSH_KEY: ${{ secrets.CPANEL_SSH_KEY }}
+          mkdir -p restart-tmp/tmp
+          date -u > restart-tmp/tmp/restart.txt
+          cat restart-tmp/tmp/restart.txt
 
-      - name: Pull + install + restart Node app on cPanel
+      - name: Upload restart trigger via FTP
         if: steps.gate.outputs.skip != 'true'
-        uses: appleboy/ssh-action@v1.0.3
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
-          host: ${{ secrets.CPANEL_HOST }}
-          username: ${{ secrets.CPANEL_USER }}
-          key: ${{ secrets.CPANEL_SSH_KEY }}
-          port: ${{ secrets.CPANEL_PORT || 22 }}
-          script: |
-            set -e
-            echo "=== backend deploy ==="
-            cd "${{ secrets.BACKEND_PATH }}"
-            # Sync code: prefer existing git checkout, else clone is a one-time manual step
-            if [ -d .git ]; then
-              git fetch origin main
-              git reset --hard origin/main
-            else
-              echo "WARN: BACKEND_PATH is not a git checkout. Clone the repo here first."
-              echo "Falling back to Git Version Control path ~/shapoorji-delivery if present."
-              if [ -d ~/shapoorji-delivery/.git ]; then
-                cd ~/shapoorji-delivery
-                git pull origin main
-                cp -r server/. "${{ secrets.BACKEND_PATH }}/"
-                cd "${{ secrets.BACKEND_PATH }}"
-              else
-                exit 1
-              fi
-            fi
-            # Install prod deps (cPanel Node selector uses this dir)
-            if command -v npm >/dev/null 2>&1; then
-              npm install --omit=dev
-            fi
-            # Trigger Passenger / Node app restart (whichever exists; ignore failures)
-            mkdir -p tmp
-            touch tmp/restart.txt || true
-            (cloudlinux-selector restart --json --interpreter nodejs --app-root "$PWD" || true)
-            echo "=== backend deploy done ==="
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_API_USERNAME }}
+          password: ${{ secrets.FTP_API_PASSWORD }}
+          protocol: ftp
+          port: 21
+          local-dir: ./restart-tmp/
+          server-dir: ./
+          dangerous-clean-slate: false

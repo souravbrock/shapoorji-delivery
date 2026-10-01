@@ -111,6 +111,17 @@ jobs:
           FTP_API_USERNAME: ${{ secrets.FTP_API_USERNAME }}
           FTP_API_PASSWORD: ${{ secrets.FTP_API_PASSWORD }}
 
+      # Passenger restarts when tmp/restart.txt changes. It MUST ride inside
+      # the single sync below: a second sync of a smaller folder makes the
+      # action DELETE everything else on the server to "match" (this exact
+      # bug once wiped the app). Never add another sync step to this job.
+      - name: Refresh restart trigger inside server/
+        if: steps.gate.outputs.skip != 'true'
+        run: |
+          mkdir -p server/tmp
+          date -u > server/tmp/restart.txt
+          cat server/tmp/restart.txt
+
       - name: Upload server/ to the Node app root via FTP
         if: steps.gate.outputs.skip != 'true'
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
@@ -123,6 +134,8 @@ jobs:
           local-dir: ./server/
           # IMPORTANT: this FTP account's home directory must BE
           # /home/reddevil/shapoorji-api (set in cPanel -> FTP Accounts).
+          # Then server-dir stays ./ . Do NOT set it to the full filesystem path.
+          # This must stay the ONLY sync step in this job (see note above).
           server-dir: ./
           dangerous-clean-slate: false
           exclude: |
@@ -131,23 +144,3 @@ jobs:
             **/node_modules/**
             public/uploads/**
             .env
-
-      - name: Trigger Passenger restart
-        if: steps.gate.outputs.skip != 'true'
-        run: |
-          mkdir -p restart-tmp/tmp
-          date -u > restart-tmp/tmp/restart.txt
-          cat restart-tmp/tmp/restart.txt
-
-      - name: Upload restart trigger via FTP
-        if: steps.gate.outputs.skip != 'true'
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
-        with:
-          server: ${{ secrets.FTP_SERVER }}
-          username: ${{ secrets.FTP_API_USERNAME }}
-          password: ${{ secrets.FTP_API_PASSWORD }}
-          protocol: ftp
-          port: 21
-          local-dir: ./restart-tmp/
-          server-dir: ./
-          dangerous-clean-slate: false

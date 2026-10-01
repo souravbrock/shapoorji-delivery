@@ -1,0 +1,103 @@
+# Android APK release: builds the Capacitor app and attaches a signed APK
+# to a GitHub Release. Obtanium picks up GitHub Releases automatically.
+#
+# HOW TO RELEASE:
+#   1. Add the 3 ANDROID_* secrets below (one time).
+#   2. Tag:  git tag v1.0.0; git push origin v1.0.0
+#      (versionName comes from the tag; versionCode = run number, always rising)
+#   3. Find ShapoorjiDelivery-v1.0.0.apk under the new GitHub Release.
+#
+# REQUIRED GitHub Secrets:
+#   ANDROID_KEYSTORE_BASE64  base64 of the release keystore (kept off-repo)
+#   ANDROID_KEYSTORE_PASSWORD  store + key password
+#   ANDROID_KEY_ALIAS  e.g. shapoorji
+#   VITE_API_URL  same as the website (baked into the app at build time)
+#
+# NOTE: server/package.json changes need no action here (app talks to the
+# live API). If android/ platform files change, they are committed like source.
+
+name: Android APK Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version name if run manually (e.g. 1.0.0)'
+        required: false
+        default: '1.0.0'
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Resolve version
+        id: ver
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+          else
+            TAG="v${{ inputs.version }}"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "name=${TAG#v}" >> "$GITHUB_OUTPUT"
+          echo "Building $TAG (versionCode ${{ github.run_number }})"
+
+      - run: npm ci
+
+      - run: npm run build
+        env:
+          VITE_API_URL: ${{ secrets.VITE_API_URL }}
+
+      - run: npx cap sync android
+
+      - name: Stamp version into Gradle
+        run: |
+          sed -i "s/versionCode .*/versionCode ${{ github.run_number }}/" android/app/build.gradle
+          sed -i "s/versionName .*/versionName \"${{ steps.ver.outputs.name }}\"/" android/app/build.gradle
+          grep -n "versionCode\|versionName" android/app/build.gradle
+
+      - name: Restore release keystore
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/app/release.keystore
+          ls -la android/app/release.keystore
+
+      - name: Build signed APK
+        run: |
+          chmod +x android/gradlew
+          cd android
+          ./gradlew assembleRelease \
+            -Pandroid.injected.signing.store.file="$PWD/app/release.keystore" \
+            -Pandroid.injected.signing.store.password="${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" \
+            -Pandroid.injected.signing.key.alias="${{ secrets.ANDROID_KEY_ALIAS }}" \
+            -Pandroid.injected.signing.key.password="${{ secrets.ANDROID_KEYSTORE_PASSWORD }}"
+          rm -f app/release.keystore
+
+      - name: Rename APK
+        run: |
+          mv android/app/build/outputs/apk/release/app-release.apk \
+             "ShapoorjiDelivery-${{ steps.ver.outputs.tag }}.apk"
+          ls -la ShapoorjiDelivery-*.apk
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.ver.outputs.tag }}
+          name: Shapoorji Delivery ${{ steps.ver.outputs.tag }}
+          generate_release_notes: true
+          files: ShapoorjiDelivery-${{ steps.ver.outputs.tag }}.apk

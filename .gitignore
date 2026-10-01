@@ -31,3 +31,7 @@ Thumbs.db
 # Misc junk
 *.zip
 dist/whatever.zip
+
+# Android signing keys (live in GitHub Secrets, never in git)
+*.keystore
+*.jks

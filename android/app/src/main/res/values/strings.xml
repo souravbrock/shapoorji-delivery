@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Shapoorji Delivery</string>
+    <string name="title_activity_main">Shapoorji Delivery</string>
+    <string name="package_name">in.co.reddevils.spdelivery</string>
+    <string name="custom_url_scheme">in.co.reddevils.spdelivery</string>
+</resources>
